@@ -43,12 +43,9 @@ export class TelegramService {
           'Available commands:\n' +
           '/status - View current monitoring status\n' +
           '/start - Show this help message\n\n' +
-          'You will receive notifications for all position changes:\n' +
-          '• Position opened\n' +
-          '• Position closed\n' +
-          '• Position increased\n' +
-          '• Position decreased\n' +
-          '• Position reversed';
+          'You will receive notifications for:\n' +
+          '• Critical errors (order failures)\n' +
+          '• Underwater positions (>10% account loss)';
         this.sendMessage(message);
       }
     });
@@ -113,6 +110,47 @@ export class TelegramService {
   async sendError(error: string): Promise<void> {
     if (!this.enabled) return;
     await this.sendMessage(`❌ *Error*\n\n${error}`);
+  }
+
+  async sendUnderwaterPositionAlert(
+    coin: string,
+    side: string,
+    leverage: number,
+    size: number,
+    entryPrice: number,
+    markPrice: number,
+    unrealizedPnl: number,
+    percentOfAccount: number,
+    lastTradeTime: number
+  ): Promise<void> {
+    if (!this.enabled) return;
+
+    const timeAgo = this.formatTimeAgo(Date.now() - lastTradeTime);
+
+    const message =
+      '⚠️ *Position Underwater*\n\n' +
+      `*Coin:* ${coin}\n` +
+      `*Side:* ${side.toUpperCase()} ${leverage}x\n` +
+      `*Size:* ${size.toFixed(4)}\n` +
+      `*Entry:* $${entryPrice.toFixed(4)}\n` +
+      `*Mark:* $${markPrice.toFixed(4)}\n` +
+      `*Unrealized PnL:* $${unrealizedPnl.toFixed(2)}\n` +
+      `*Loss:* ${percentOfAccount.toFixed(2)}% of account\n` +
+      `*Last Trade:* ${timeAgo}`;
+
+    await this.sendMessage(message);
+  }
+
+  private formatTimeAgo(ms: number): string {
+    const seconds = Math.floor(ms / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 24);
+
+    if (days > 0) return `${days}d ${hours % 24}h ago`;
+    if (hours > 0) return `${hours}h ${minutes % 60}m ago`;
+    if (minutes > 0) return `${minutes}m ago`;
+    return `${seconds}s ago`;
   }
 
   async sendMessage(text: string): Promise<void> {

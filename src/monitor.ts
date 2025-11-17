@@ -3,6 +3,7 @@ import { HyperliquidService } from './services/hyperliquid.service';
 import { TradeHistoryService } from './services/trade-history.service';
 import { WebSocketFillsService } from './services/websocket-fills.service';
 import { TelegramService } from './services/telegram.service';
+import { PositionMonitorService } from './services/position-monitor.service';
 import { calculateBalanceRatio } from './utils/scaling.utils';
 import { loadConfig } from './config';
 
@@ -25,7 +26,8 @@ const processFill = async (
   tradeHistoryService: TradeHistoryService,
   userWallet: string,
   telegramService: TelegramService,
-  startTime: number
+  startTime: number,
+  lastTradeTimes: Map<string, number>
 ): Promise<FillProcessingResult> => {
   try {
     const action = tradeHistoryService.determineAction(fill);
@@ -73,17 +75,20 @@ const processFill = async (
       console.log(`✓ ${action.action.toUpperCase()} ${action.size.toFixed(4)} ${action.coin} in ${executionTime}ms\n`);
     });
 
-    // Telegram notification (fire and forget)
-    if (telegramService.isEnabled() && orderResponse) {
-      telegramService.sendMessage(`✅ Trade Executed\n\nCoin: ${action.coin}\nAction: ${action.action.toUpperCase()} ${action.side.toUpperCase()}\nSize: ${action.size.toFixed(4)}\nPrice: $${parseFloat(fill.px).toFixed(4)}\n\n${action.reason}`).catch(() => {});
-    }
+    lastTradeTimes.set(action.coin, Date.now());
 
     return { success: true, coin: action.coin, action: action.action };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     setImmediate(() => console.error(`✗ ${fill.coin} failed: ${errorMessage}`));
-    if (telegramService.isEnabled()) {
-      telegramService.sendError(`Trade execution failed for ${fill.coin}: ${errorMessage}`).catch(() => {});
+
+    const isCriticalError = !errorMessage.toLowerCase().includes('position') &&
+                           !errorMessage.toLowerCase().includes('reduce') &&
+                           !errorMessage.toLowerCase().includes('close') &&
+                           !errorMessage.toLowerCase().includes('not found');
+
+    if (telegramService.isEnabled() && isCriticalError) {
+      telegramService.sendError(`Order failed for ${fill.coin}: ${errorMessage}`).catch(() => {});
     }
     return { success: false, coin: fill.coin, error: errorMessage };
   }
@@ -106,6 +111,8 @@ const monitorTrackedWallet = async (
   let webSocketFillsService: WebSocketFillsService | null = null;
   let lastBalanceUpdate = 0;
   const BALANCE_UPDATE_INTERVAL = 1 * 60 * 1000;
+  const lastTradeTimes = new Map<string, number>();
+  const positionMonitor = new PositionMonitorService();
 
   console.log('\n🚀 Copy Trading Bot Started\n');
   console.log(`📊 Tracked Wallet: ${trackedWallet}`);
@@ -161,6 +168,26 @@ const monitorTrackedWallet = async (
         ignoredCoins: [],
         uptime: Date.now() - startTime
       });
+
+      const underwaterPositions = positionMonitor.checkPositions(
+        userPositions,
+        parseFloat(userBalance.accountValue),
+        lastTradeTimes
+      );
+
+      for (const { position, percentOfAccount, lastTradeTime } of underwaterPositions) {
+        await telegramService.sendUnderwaterPositionAlert(
+          position.coin,
+          position.side,
+          position.leverage,
+          position.size,
+          position.entryPrice,
+          position.markPrice,
+          position.unrealizedPnl,
+          percentOfAccount,
+          lastTradeTime
+        );
+      }
     }
 
     lastBalanceUpdate = Date.now();
@@ -181,7 +208,7 @@ const monitorTrackedWallet = async (
 
             webSocketFillsService = new WebSocketFillsService(isTestnet);
             await webSocketFillsService.initialize(trackedWallet, async (fill) => {
-              await processFill(fill, service, tradeHistoryService!, userWallet, telegramService, Date.now());
+              await processFill(fill, service, tradeHistoryService!, userWallet, telegramService, Date.now(), lastTradeTimes);
             });
             console.log('✓ Real-time WebSocket monitoring active\n');
           }
@@ -198,7 +225,11 @@ const monitorTrackedWallet = async (
       const errorMessage = error instanceof Error ? error.message : String(error);
       console.error(`\n[${formatTimestamp(new Date())}] ❌ Error:`, errorMessage);
 
-      if (telegramService.isEnabled()) {
+      const isCriticalError = !errorMessage.toLowerCase().includes('position') &&
+                             !errorMessage.toLowerCase().includes('not found') &&
+                             !errorMessage.toLowerCase().includes('balance');
+
+      if (telegramService.isEnabled() && isCriticalError) {
         await telegramService.sendError(errorMessage);
       }
     }
