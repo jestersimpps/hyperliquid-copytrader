@@ -1,8 +1,4 @@
 import TelegramBot from 'node-telegram-bot-api';
-import type { PositionChange } from '../models/change.model';
-import type { ActionRecommendation } from './action-copy.service';
-import type { Position } from '../models';
-import type { OrderResponse } from '@nktkas/hyperliquid';
 
 export interface MonitoringStats {
   trackedWallet: string;
@@ -101,142 +97,6 @@ export class TelegramService {
     return `${address.slice(0, 6)}...${address.slice(-4)}`;
   }
 
-  async sendPositionChange(change: PositionChange): Promise<void> {
-    if (!this.enabled) return;
-
-    const emoji = this.getChangeEmoji(change.type);
-    const side = change.newSide.toUpperCase();
-    const value = change.newSize * change.newPrice;
-
-    let message = `${emoji} *Position ${change.type.toUpperCase()}*\n\n`;
-    message += `*Coin:* ${change.coin}\n`;
-    message += `*Side:* ${side}\n`;
-
-    switch (change.type) {
-      case 'opened':
-        message += `*Size:* ${change.newSize.toFixed(4)}\n`;
-        message += `*Entry Price:* $${change.newPrice.toFixed(4)}\n`;
-        message += `*Value:* $${value.toFixed(2)}`;
-        break;
-
-      case 'closed':
-        message += `*Size Closed:* ${change.previousSize.toFixed(4)}\n`;
-        message += `*Exit Price:* $${change.newPrice.toFixed(4)}`;
-        break;
-
-      case 'increased':
-        const sizeIncrease = change.newSize - change.previousSize;
-        message += `*Size Change:* ${change.previousSize.toFixed(4)} → ${change.newSize.toFixed(4)} (+${sizeIncrease.toFixed(4)})\n`;
-        message += `*Price:* $${change.newPrice.toFixed(4)}\n`;
-        message += `*New Value:* $${value.toFixed(2)}`;
-        break;
-
-      case 'decreased':
-        const sizeDecrease = change.previousSize - change.newSize;
-        message += `*Size Change:* ${change.previousSize.toFixed(4)} → ${change.newSize.toFixed(4)} (-${sizeDecrease.toFixed(4)})\n`;
-        message += `*Price:* $${change.newPrice.toFixed(4)}\n`;
-        message += `*New Value:* $${value.toFixed(2)}`;
-        break;
-
-      case 'reversed':
-        const prevSide = change.previousSide?.toUpperCase() || 'UNKNOWN';
-        message += `*Previous:* ${prevSide} ${change.previousSize.toFixed(4)}\n`;
-        message += `*Current:* ${side} ${change.newSize.toFixed(4)}\n`;
-        message += `*Price:* $${change.newPrice.toFixed(4)}\n`;
-        message += `*Value:* $${value.toFixed(2)}`;
-        break;
-    }
-
-    await this.sendMessage(message);
-  }
-
-  async sendRecommendation(recommendation: ActionRecommendation): Promise<void> {
-    if (!this.enabled || recommendation.action === 'ignore') return;
-
-    const emoji = this.getActionEmoji(recommendation.action);
-    const side = recommendation.side.toUpperCase();
-
-    let message = `${emoji} *Trade Recommendation*\n\n`;
-    message += `*Action:* ${recommendation.action.toUpperCase()} ${side}\n`;
-    message += `*Coin:* ${recommendation.coin}\n`;
-    message += `*Size:* ${recommendation.size.toFixed(4)}\n`;
-
-    if (recommendation.reason) {
-      message += `\n_${recommendation.reason}_`;
-    }
-
-    await this.sendMessage(message);
-  }
-
-  async sendTradeExecution(recommendation: ActionRecommendation, orderResponse: OrderResponse): Promise<void> {
-    if (!this.enabled || recommendation.action === 'ignore') return;
-
-    const emoji = '✅';
-    const side = recommendation.side.toUpperCase();
-
-    let message = `${emoji} *Trade Executed*\n\n`;
-    message += `*Action:* ${recommendation.action.toUpperCase()} ${side}\n`;
-    message += `*Coin:* ${recommendation.coin}\n`;
-    message += `*Size:* ${recommendation.size.toFixed(4)}\n`;
-
-    if (orderResponse.response?.data?.statuses && orderResponse.response.data.statuses.length > 0) {
-      const status = orderResponse.response.data.statuses[0];
-      if ('filled' in status) {
-        message += `*Status:* Filled\n`;
-        message += `*Avg Price:* $${parseFloat(status.filled.avgPx).toFixed(4)}\n`;
-      } else if ('resting' in status) {
-        message += `*Status:* Resting\n`;
-      }
-    }
-
-    if (recommendation.reason) {
-      message += `\n_${recommendation.reason}_`;
-    }
-
-    await this.sendMessage(message);
-  }
-
-  async sendTradeExecutionWithChange(change: PositionChange, recommendation: ActionRecommendation, orderResponse: OrderResponse): Promise<void> {
-    if (!this.enabled || recommendation.action === 'ignore') return;
-
-    const emoji = '✅';
-    const side = recommendation.side.toUpperCase();
-    const changeType = change.type.toUpperCase();
-
-    let message = `${emoji} *Trade Executed*\n\n`;
-
-    // Position change context
-    message += `*Tracked Wallet:* ${changeType} ${change.coin} ${change.newSide.toUpperCase()}\n`;
-    if (change.type === 'increased') {
-      const sizeIncrease = change.newSize - change.previousSize;
-      message += `*Change:* ${change.previousSize.toFixed(4)} → ${change.newSize.toFixed(4)} (+${sizeIncrease.toFixed(4)})\n`;
-    } else if (change.type === 'decreased') {
-      const sizeDecrease = change.previousSize - change.newSize;
-      message += `*Change:* ${change.previousSize.toFixed(4)} → ${change.newSize.toFixed(4)} (-${sizeDecrease.toFixed(4)})\n`;
-    }
-    message += '\n';
-
-    // Your trade execution
-    message += `*Your Action:* ${recommendation.action.toUpperCase()} ${side}\n`;
-    message += `*Size:* ${recommendation.size.toFixed(4)}\n`;
-
-    if (orderResponse.response?.data?.statuses && orderResponse.response.data.statuses.length > 0) {
-      const status = orderResponse.response.data.statuses[0];
-      if ('filled' in status) {
-        message += `*Status:* Filled\n`;
-        message += `*Avg Price:* $${parseFloat(status.filled.avgPx).toFixed(4)}\n`;
-      } else if ('resting' in status) {
-        message += `*Status:* Resting\n`;
-      }
-    }
-
-    if (recommendation.reason) {
-      message += `\n_${recommendation.reason}_`;
-    }
-
-    await this.sendMessage(message);
-  }
-
   async sendMonitoringStarted(trackedWallet: string, userWallet: string | null): Promise<void> {
     if (!this.enabled) return;
 
@@ -255,7 +115,7 @@ export class TelegramService {
     await this.sendMessage(`❌ *Error*\n\n${error}`);
   }
 
-  private async sendMessage(text: string): Promise<void> {
+  async sendMessage(text: string): Promise<void> {
     if (!this.bot || !this.chatId) return;
 
     try {
@@ -264,28 +124,6 @@ export class TelegramService {
       });
     } catch (error) {
       console.error('Failed to send Telegram message:', error instanceof Error ? error.message : error);
-    }
-  }
-
-  private getChangeEmoji(changeType: string): string {
-    switch (changeType) {
-      case 'opened': return '📈';
-      case 'closed': return '📉';
-      case 'increased': return '⬆️';
-      case 'decreased': return '⬇️';
-      case 'reversed': return '🔄';
-      default: return '📊';
-    }
-  }
-
-  private getActionEmoji(action: string): string {
-    switch (action) {
-      case 'open': return '🟢';
-      case 'close': return '🔴';
-      case 'add': return '➕';
-      case 'reduce': return '➖';
-      case 'reverse': return '🔄';
-      default: return '💡';
     }
   }
 

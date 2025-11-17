@@ -1,22 +1,15 @@
 import './setup';
 import { HyperliquidService } from './services/hyperliquid.service';
-import { MonitoringService } from './services/monitoring.service';
-import { IgnoreListService } from './services/ignore-list.service';
-import { ActionCopyService } from './services/action-copy.service';
-import { AccumulationTrackerService } from './services/accumulation-tracker.service';
+import { TradeHistoryService } from './services/trade-history.service';
 import { TelegramService } from './services/telegram.service';
-import type { Position } from './models';
-import {
-  displayPositionChange,
-  displayActionRecommendation,
-  displayMonitoringHeader,
-  displayIgnoreListInit,
-  formatTimestamp
-} from './utils/display.utils';
 import { calculateBalanceRatio } from './utils/scaling.utils';
 import { loadConfig } from './config';
 
 const DEFAULT_POLL_INTERVAL = 1000;
+
+const formatTimestamp = (date: Date): string => {
+  return date.toLocaleTimeString('en-US', { hour12: false });
+};
 
 const monitorTrackedWallet = async (
   trackedWallet: string,
@@ -29,15 +22,16 @@ const monitorTrackedWallet = async (
   const service = new HyperliquidService(privateKey, userWallet, isTestnet);
   await service.initialize();
 
-  const monitoringService = new MonitoringService();
-  const ignoreListService = new IgnoreListService();
-  const accumulationTracker = new AccumulationTrackerService();
   const startTime = Date.now();
-
-  let actionCopyService: ActionCopyService | null = null;
   let balanceRatio = 1;
+  let tradeHistoryService: TradeHistoryService | null = null;
 
-  displayMonitoringHeader(trackedWallet, userWallet, pollInterval);
+  console.log('\n🚀 Copy Trading Bot Started\n');
+  console.log(`📊 Tracked Wallet: ${trackedWallet}`);
+  if (userWallet) {
+    console.log(`👤 Your Wallet: ${userWallet}`);
+  }
+  console.log(`⏱️  Poll Interval: ${pollInterval}ms\n`);
 
   if (telegramService.isEnabled()) {
     await telegramService.sendMonitoringStarted(trackedWallet, userWallet);
@@ -47,13 +41,12 @@ const monitorTrackedWallet = async (
 
   const poll = async (): Promise<void> => {
     try {
-      const [trackedPositions, trackedBalance] = await Promise.all([
-        service.getOpenPositions(trackedWallet),
+      const [trackedBalance] = await Promise.all([
         service.getAccountBalance(trackedWallet)
       ]);
 
-      let userPositions: Position[] = [];
       let userBalance = null;
+      let userPositions: any[] = [];
 
       if (userWallet) {
         [userPositions, userBalance] = await Promise.all([
@@ -67,189 +60,168 @@ const monitorTrackedWallet = async (
         );
 
         if (isFirstRun) {
-          actionCopyService = new ActionCopyService(ignoreListService, accumulationTracker, balanceRatio);
+          tradeHistoryService = new TradeHistoryService(service.publicClient, balanceRatio);
         }
       }
 
-      const snapshot = monitoringService.createSnapshot(
-        trackedPositions,
-        parseFloat(trackedBalance.withdrawable)
-      );
-
-      const changes = monitoringService.detectChanges(snapshot);
-
       if (isFirstRun) {
-        ignoreListService.initialize(trackedPositions);
-
-        console.log(`[${formatTimestamp(new Date())}] 📊 Initial snapshot captured`);
-        console.log(`  Tracked Positions: ${trackedPositions.length}`);
-        console.log(`  Tracked Balance (withdrawable): $${parseFloat(trackedBalance.withdrawable).toFixed(2)}`);
+        console.log(`[${formatTimestamp(new Date())}] 📊 Initial State`);
+        console.log(`  Tracked Balance: $${parseFloat(trackedBalance.withdrawable).toFixed(2)}`);
 
         if (userWallet && userBalance) {
-          console.log(`  Your Positions: ${userPositions.length}`);
-          console.log(`  Your Balance (withdrawable): $${parseFloat(userBalance.withdrawable).toFixed(2)}`);
+          console.log(`  Your Balance: $${parseFloat(userBalance.withdrawable).toFixed(2)}`);
           console.log(`  Balance Ratio: 1:${balanceRatio.toFixed(4)}`);
+          console.log(`  Your Positions: ${userPositions.length}`);
         }
 
-        displayIgnoreListInit(ignoreListService.getIgnoreList());
+        console.log(`\n✅ Monitoring started - watching for trades...\n`);
 
-        // Update telegram stats
         if (telegramService.isEnabled()) {
           telegramService.updateStats({
             trackedWallet,
             userWallet,
-            trackedPositions: trackedPositions.length,
+            trackedPositions: 0,
             trackedBalance: parseFloat(trackedBalance.withdrawable),
             userPositions: userPositions.length,
             userBalance: userBalance ? parseFloat(userBalance.withdrawable) : 0,
             balanceRatio,
-            ignoredCoins: ignoreListService.getIgnoreList().map(i => `${i.coin} ${i.side.toUpperCase()}`),
+            ignoredCoins: [],
             uptime: Date.now() - startTime
           });
         }
 
         isFirstRun = false;
-      } else if (changes.length > 0) {
-        // Process all changes and execute trades in parallel
-        const tradeExecutions = changes.map(async (change) => {
-          displayPositionChange(change);
+      } else if (userWallet && tradeHistoryService) {
+        // Fetch new fills/trades
+        const newFills = await tradeHistoryService.getNewFills(trackedWallet);
 
-          if (userWallet && actionCopyService) {
-            const recommendation = actionCopyService.getRecommendation(
-              change,
-              userPositions,
-              trackedPositions
-            );
+        if (newFills.length > 0) {
+          console.log(`\n[${formatTimestamp(new Date())}] 🔔 ${newFills.length} NEW TRADE(S) DETECTED`);
+          console.log('━'.repeat(50));
 
-            if (recommendation) {
-              displayActionRecommendation(recommendation);
+          // Process each new fill
+          for (const fill of newFills) {
+            const action = tradeHistoryService.determineAction(fill);
 
-              // Execute the trade if action is not 'ignore'
-              if (recommendation.action !== 'ignore' && service.canExecuteTrades()) {
-                try {
-                  let orderResponse;
-                  let adjustedSize = recommendation.size;
+            if (!action) continue;
 
-                  // Check minimum order value ($10) and adjust size if needed
-                  const MIN_ORDER_VALUE = 10;
-                  const position = trackedPositions.find(p => p.coin === recommendation.coin);
+            console.log(`\n📈 Tracked Wallet: ${action.action.toUpperCase()} ${action.side.toUpperCase()} ${fill.coin}`);
+            console.log(`   Size: ${parseFloat(fill.sz).toFixed(4)} @ $${parseFloat(fill.px).toFixed(4)}`);
+            console.log(`\n💡 YOUR ACTION:`);
+            console.log(`   ${action.action.toUpperCase()} ${action.side.toUpperCase()} ${action.size.toFixed(4)} ${fill.coin}`);
+            console.log(`   ${action.reason}`);
 
-                  if (position && ['reduce', 'add', 'open'].includes(recommendation.action)) {
-                    const markPrice = position.markPrice;
-                    let executionPrice = markPrice;
+            // Execute the trade if we can
+            if (service.canExecuteTrades()) {
+              try {
+                const MIN_ORDER_VALUE = 10;
+                let adjustedSize = action.size;
 
-                    // Account for 0.5% slippage in the direction of the trade
-                    // BUY orders (long positions): price goes UP 0.5% (pay more)
-                    // SELL orders (short positions or reductions): price goes DOWN 0.5% (receive less)
-                    if (['open', 'add'].includes(recommendation.action) && recommendation.side === 'long') {
-                      executionPrice = markPrice * 1.005; // Buying: pay 0.5% more
-                    } else if (recommendation.action === 'reduce' ||
-                               (['open', 'add'].includes(recommendation.action) && recommendation.side === 'short')) {
-                      executionPrice = markPrice * 0.995; // Selling: receive 0.5% less
+                // Check minimum order value
+                const estimatedPrice = parseFloat(fill.px);
+                const orderValue = action.size * estimatedPrice;
+
+                if (orderValue < MIN_ORDER_VALUE && action.action !== 'close') {
+                  // Account for slippage
+                  let executionPrice = estimatedPrice;
+                  if (action.action === 'open' && action.side === 'long') {
+                    executionPrice = estimatedPrice * 1.005;
+                  } else if (action.action === 'reduce' || action.side === 'short') {
+                    executionPrice = estimatedPrice * 0.995;
+                  }
+
+                  adjustedSize = MIN_ORDER_VALUE / executionPrice;
+                  console.log(`   ⚠️  Adjusted size to meet $10 minimum: ${action.size.toFixed(4)} → ${adjustedSize.toFixed(4)}`);
+                }
+
+                let orderResponse;
+
+                switch (action.action) {
+                  case 'open':
+                    if (action.side === 'long') {
+                      orderResponse = await service.openLong(action.coin, adjustedSize);
+                    } else {
+                      orderResponse = await service.openShort(action.coin, adjustedSize);
                     }
+                    console.log(`   ✓ Executed: OPENED ${action.side.toUpperCase()} ${adjustedSize.toFixed(4)} ${action.coin}`);
+                    break;
 
-                    const orderValue = recommendation.size * executionPrice;
+                  case 'close':
+                    orderResponse = await service.closePosition(action.coin, adjustedSize);
+                    console.log(`   ✓ Executed: CLOSED ${adjustedSize.toFixed(4)} ${action.coin}`);
+                    break;
 
-                    if (orderValue < MIN_ORDER_VALUE) {
-                      adjustedSize = MIN_ORDER_VALUE / executionPrice;
-                      console.log(`  ⚠️  Order value $${orderValue.toFixed(2)} < $${MIN_ORDER_VALUE}. Adjusting size: ${recommendation.size.toFixed(4)} → ${adjustedSize.toFixed(4)} (using ${executionPrice > markPrice ? '+' : ''}${((executionPrice / markPrice - 1) * 100).toFixed(1)}% slippage)`);
+                  case 'add':
+                    if (action.side === 'long') {
+                      orderResponse = await service.openLong(action.coin, adjustedSize);
+                    } else {
+                      orderResponse = await service.openShort(action.coin, adjustedSize);
                     }
-                  }
+                    console.log(`   ✓ Executed: ADDED ${adjustedSize.toFixed(4)} ${action.coin}`);
+                    break;
 
-                  switch (recommendation.action) {
-                    case 'open':
-                      if (recommendation.side === 'long') {
-                        orderResponse = await service.openLong(recommendation.coin, adjustedSize);
-                      } else {
-                        orderResponse = await service.openShort(recommendation.coin, adjustedSize);
-                      }
-                      console.log(`  ✓ Executed: ${recommendation.action.toUpperCase()} ${recommendation.side.toUpperCase()} ${adjustedSize.toFixed(4)} ${recommendation.coin}`);
-                      break;
+                  case 'reduce':
+                    orderResponse = await service.reducePosition(action.coin, adjustedSize);
+                    console.log(`   ✓ Executed: REDUCED ${adjustedSize.toFixed(4)} ${action.coin}`);
+                    break;
 
-                    case 'close':
-                      orderResponse = await service.closePosition(recommendation.coin, recommendation.size);
-                      console.log(`  ✓ Executed: CLOSED ${recommendation.size.toFixed(4)} ${recommendation.coin}`);
-                      break;
+                  case 'reverse':
+                    // Close old position
+                    const oldPosition = userPositions.find(p => p.coin === action.coin);
+                    if (oldPosition) {
+                      await service.closePosition(action.coin);
+                      console.log(`   ✓ Closed old ${oldPosition.side.toUpperCase()} position`);
+                    }
+                    // Open new position
+                    if (action.side === 'long') {
+                      orderResponse = await service.openLong(action.coin, adjustedSize);
+                    } else {
+                      orderResponse = await service.openShort(action.coin, adjustedSize);
+                    }
+                    console.log(`   ✓ Executed: OPENED new ${action.side.toUpperCase()} ${adjustedSize.toFixed(4)} ${action.coin}`);
+                    break;
+                }
 
-                    case 'add':
-                      if (recommendation.side === 'long') {
-                        orderResponse = await service.openLong(recommendation.coin, adjustedSize);
-                      } else {
-                        orderResponse = await service.openShort(recommendation.coin, adjustedSize);
-                      }
-                      console.log(`  ✓ Executed: ADDED ${adjustedSize.toFixed(4)} ${recommendation.coin} ${recommendation.side.toUpperCase()}`);
-                      break;
+                // Send Telegram notification (non-blocking)
+                if (telegramService.isEnabled() && orderResponse) {
+                  telegramService.sendMessage(`✅ Trade Executed\n\nCoin: ${action.coin}\nAction: ${action.action.toUpperCase()} ${action.side.toUpperCase()}\nSize: ${adjustedSize.toFixed(4)}\nPrice: $${parseFloat(fill.px).toFixed(4)}\n\n${action.reason}`).catch(() => {});
+                }
 
-                    case 'reduce':
-                      orderResponse = await service.reducePosition(recommendation.coin, adjustedSize);
-                      console.log(`  ✓ Executed: REDUCED ${adjustedSize.toFixed(4)} ${recommendation.coin}`);
-                      break;
+              } catch (error) {
+                const errorMessage = error instanceof Error ? error.message : String(error);
+                console.error(`   ✗ Trade execution failed: ${errorMessage}`);
 
-                    case 'reverse':
-                      // First close the old position
-                      const currentPos = userPositions.find(p => p.coin === recommendation.coin);
-                      if (currentPos) {
-                        await service.closePosition(recommendation.coin);
-                        console.log(`  ✓ Executed: CLOSED old ${currentPos.side.toUpperCase()} position`);
-                      }
-
-                      // Then open the new position
-                      if (recommendation.side === 'long') {
-                        orderResponse = await service.openLong(recommendation.coin, adjustedSize);
-                      } else {
-                        orderResponse = await service.openShort(recommendation.coin, adjustedSize);
-                      }
-                      console.log(`  ✓ Executed: OPENED new ${recommendation.side.toUpperCase()} ${adjustedSize.toFixed(4)} ${recommendation.coin}`);
-                      break;
-                  }
-
-                  // Send Telegram notification for successful execution (non-blocking)
-                  if (telegramService.isEnabled() && orderResponse) {
-                    telegramService.sendTradeExecutionWithChange(change, recommendation, orderResponse).catch(err => {
-                      console.error('Failed to send Telegram notification:', err instanceof Error ? err.message : err);
-                    });
-                  }
-
-                } catch (error) {
-                  const errorMessage = error instanceof Error ? error.message : String(error);
-                  console.error(`  ✗ Trade execution failed: ${errorMessage}`);
-
-                  // Send Telegram error notification (non-blocking)
-                  if (telegramService.isEnabled()) {
-                    telegramService.sendError(`Trade execution failed for ${recommendation.coin}: ${errorMessage}`).catch(() => {});
-                  }
+                if (telegramService.isEnabled()) {
+                  telegramService.sendError(`Trade execution failed for ${action.coin}: ${errorMessage}`).catch(() => {});
                 }
               }
             }
           }
-        });
 
-        // Wait for all trades to execute in parallel
-        await Promise.allSettled(tradeExecutions);
+          console.log('\n' + '━'.repeat(50) + '\n');
+        } else {
+          process.stdout.write(`\r[${formatTimestamp(new Date())}] ✓ No new trades - monitoring...`);
+        }
 
-        // Update telegram stats after changes
+        // Update telegram stats periodically
         if (telegramService.isEnabled()) {
           telegramService.updateStats({
             trackedWallet,
             userWallet,
-            trackedPositions: trackedPositions.length,
+            trackedPositions: 0,
             trackedBalance: parseFloat(trackedBalance.withdrawable),
             userPositions: userPositions.length,
             userBalance: userBalance ? parseFloat(userBalance.withdrawable) : 0,
             balanceRatio,
-            ignoredCoins: ignoreListService.getIgnoreList().map(i => `${i.coin} ${i.side.toUpperCase()}`),
+            ignoredCoins: [],
             uptime: Date.now() - startTime
           });
         }
-      } else {
-        const time = formatTimestamp(new Date());
-        process.stdout.write(`\r[${time}] ✓ No changes detected - monitoring...`);
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       console.error(`\n[${formatTimestamp(new Date())}] ❌ Error:`, errorMessage);
 
-      // Send telegram error notification
       if (telegramService.isEnabled()) {
         await telegramService.sendError(errorMessage);
       }
