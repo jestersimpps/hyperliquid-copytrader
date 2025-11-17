@@ -44,14 +44,6 @@ const processFill = async (
       return { success: true, coin: fill.coin, action: action.action };
     }
 
-    // Only fetch positions when needed (for close, reduce, reverse)
-    const needsPositions = ['close', 'reduce', 'reverse'].includes(action.action);
-    let userPositions: any[] = [];
-
-    if (needsPositions) {
-      userPositions = await service.getOpenPositions(userWallet);
-    }
-
     let orderResponse;
 
     switch (action.action) {
@@ -65,15 +57,8 @@ const processFill = async (
         break;
 
       case 'close':
-        const posToClose = userPositions.find(p => p.coin === action.coin);
-
-        if (!posToClose) {
-          console.log(`   ⚠️  Skipping CLOSE - you don't have ${action.coin} position`);
-          return { success: true, coin: action.coin, action: 'close-skipped' };
-        }
-
         orderResponse = await service.closePosition(action.coin);
-        console.log(`   ✓ Executed: CLOSED ${posToClose.size.toFixed(4)} ${action.coin}`);
+        console.log(`   ✓ Executed: CLOSED ${action.coin}`);
         break;
 
       case 'add':
@@ -86,29 +71,16 @@ const processFill = async (
         break;
 
       case 'reduce':
-        const currentPosition = userPositions.find(p => p.coin === action.coin);
-
-        if (!currentPosition) {
-          console.log(`   ⚠️  Skipping REDUCE - you don't have ${action.coin} position`);
-          return { success: true, coin: action.coin, action: 'reduce-skipped' };
-        }
-
-        if (action.size >= currentPosition.size) {
-          console.log(`   ⚠️  Reduce amount (${action.size.toFixed(4)}) >= position size (${currentPosition.size.toFixed(4)})`);
-          console.log(`   → Closing 100% instead`);
-          orderResponse = await service.closePosition(action.coin);
-          console.log(`   ✓ Executed: CLOSED ${currentPosition.size.toFixed(4)} ${action.coin}`);
-        } else {
-          orderResponse = await service.reducePosition(action.coin, action.size);
-          console.log(`   ✓ Executed: REDUCED ${action.size.toFixed(4)} ${action.coin}`);
-        }
+        orderResponse = await service.reducePosition(action.coin, action.size);
+        console.log(`   ✓ Executed: REDUCED ${action.size.toFixed(4)} ${action.coin}`);
         break;
 
       case 'reverse':
-        const oldPosition = userPositions.find(p => p.coin === action.coin);
-        if (oldPosition) {
+        try {
           await service.closePosition(action.coin);
-          console.log(`   ✓ Closed old ${oldPosition.side.toUpperCase()} position`);
+          console.log(`   ✓ Closed old position`);
+        } catch (error) {
+          console.log(`   ℹ️  No existing position to close`);
         }
         if (action.side === 'long') {
           orderResponse = await service.openLong(action.coin, action.size);
