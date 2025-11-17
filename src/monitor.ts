@@ -29,69 +29,50 @@ const processFill = async (
 ): Promise<FillProcessingResult> => {
   try {
     const action = tradeHistoryService.determineAction(fill);
+    if (!action) return { success: true, coin: fill.coin };
+    if (!service.canExecuteTrades()) return { success: true, coin: fill.coin, action: action.action };
 
-    if (!action) {
-      console.log(`[Monitor] Fill ignored - determineAction returned null for ${fill.coin} tid=${fill.tid}`);
-      return { success: true, coin: fill.coin };
-    }
-
-    console.log(`📈 Tracked Wallet: ${action.action.toUpperCase()} ${action.side.toUpperCase()} ${fill.coin} | Size: ${parseFloat(fill.sz).toFixed(4)} @ $${parseFloat(fill.px).toFixed(4)}`);
-    console.log(`💡 Your Action: ${action.action.toUpperCase()} ${action.side.toUpperCase()} ${action.size.toFixed(4)} ${fill.coin}`);
-
-    if (!service.canExecuteTrades()) {
-      return { success: true, coin: fill.coin, action: action.action };
-    }
+    // Log async to avoid blocking
+    setImmediate(() => {
+      console.log(`📈 ${action.action.toUpperCase()} ${action.side.toUpperCase()} ${fill.coin} | ${parseFloat(fill.sz).toFixed(4)} @ $${parseFloat(fill.px).toFixed(4)}`);
+    });
 
     let orderResponse;
 
     switch (action.action) {
       case 'open':
-        if (action.side === 'long') {
-          orderResponse = await service.openLong(action.coin, action.size);
-        } else {
-          orderResponse = await service.openShort(action.coin, action.size);
-        }
-        console.log(`   ✓ Executed: OPENED ${action.side.toUpperCase()} ${action.size.toFixed(4)} ${action.coin}`);
+        orderResponse = await (action.side === 'long' ? service.openLong(action.coin, action.size) : service.openShort(action.coin, action.size));
         break;
 
       case 'close':
         orderResponse = await service.closePosition(action.coin);
-        console.log(`   ✓ Executed: CLOSED ${action.coin}`);
         break;
 
       case 'add':
-        if (action.side === 'long') {
-          orderResponse = await service.openLong(action.coin, action.size);
-        } else {
-          orderResponse = await service.openShort(action.coin, action.size);
-        }
-        console.log(`   ✓ Executed: ADDED ${action.size.toFixed(4)} ${action.coin}`);
+        orderResponse = await (action.side === 'long' ? service.openLong(action.coin, action.size) : service.openShort(action.coin, action.size));
         break;
 
       case 'reduce':
         orderResponse = await service.reducePosition(action.coin, action.size);
-        console.log(`   ✓ Executed: REDUCED ${action.size.toFixed(4)} ${action.coin}`);
         break;
 
       case 'reverse':
         try {
           await service.closePosition(action.coin);
-          console.log(`   ✓ Closed old position`);
         } catch (error) {
-          console.log(`   ℹ️  No existing position to close`);
+          // Position doesn't exist, continue
         }
-        if (action.side === 'long') {
-          orderResponse = await service.openLong(action.coin, action.size);
-        } else {
-          orderResponse = await service.openShort(action.coin, action.size);
-        }
-        console.log(`   ✓ Executed: OPENED new ${action.side.toUpperCase()} ${action.size.toFixed(4)} ${action.coin}`);
+        orderResponse = await (action.side === 'long' ? service.openLong(action.coin, action.size) : service.openShort(action.coin, action.size));
         break;
     }
 
+    // Log async to avoid blocking
     const executionTime = Date.now() - startTime;
-    console.log(`✓ Executed in ${executionTime}ms\n`);
+    setImmediate(() => {
+      console.log(`✓ ${action.action.toUpperCase()} ${action.size.toFixed(4)} ${action.coin} in ${executionTime}ms\n`);
+    });
 
+    // Telegram notification (fire and forget)
     if (telegramService.isEnabled() && orderResponse) {
       telegramService.sendMessage(`✅ Trade Executed\n\nCoin: ${action.coin}\nAction: ${action.action.toUpperCase()} ${action.side.toUpperCase()}\nSize: ${action.size.toFixed(4)}\nPrice: $${parseFloat(fill.px).toFixed(4)}\n\n${action.reason}`).catch(() => {});
     }
@@ -99,12 +80,10 @@ const processFill = async (
     return { success: true, coin: action.coin, action: action.action };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    console.error(`✗ Trade execution failed for ${fill.coin}: ${errorMessage}`);
-
+    setImmediate(() => console.error(`✗ ${fill.coin} failed: ${errorMessage}`));
     if (telegramService.isEnabled()) {
       telegramService.sendError(`Trade execution failed for ${fill.coin}: ${errorMessage}`).catch(() => {});
     }
-
     return { success: false, coin: fill.coin, error: errorMessage };
   }
 };
@@ -201,9 +180,7 @@ const monitorTrackedWallet = async (
 
             webSocketFillsService = new WebSocketFillsService(isTestnet);
             await webSocketFillsService.initialize(trackedWallet, async (fill) => {
-              const startTime = Date.now();
-              console.log(`\n[${formatTimestamp(new Date())}] 🔔 NEW TRADE DETECTED`);
-              await processFill(fill, service, tradeHistoryService!, userWallet, telegramService, startTime);
+              await processFill(fill, service, tradeHistoryService!, userWallet, telegramService, Date.now());
             });
             console.log('✓ Real-time WebSocket monitoring active\n');
           }

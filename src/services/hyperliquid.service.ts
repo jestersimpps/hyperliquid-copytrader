@@ -309,9 +309,9 @@ export class HyperliquidService {
     );
 
     if (validationResult.wasAdjusted) {
-      console.log(`   ⚠️  Adjusted BUY order size to meet $${this.minOrderValue} minimum:`);
-      console.log(`       ${initialFormattedSize} → ${validationResult.formattedSize} ${coin}`);
-      console.log(`       Order value: $${validationResult.originalOrderValue.toFixed(2)} → $${validationResult.finalOrderValue.toFixed(2)}`);
+      setImmediate(() => {
+        console.log(`   ⚠️  Adjusted ${coin}: ${initialFormattedSize} → ${validationResult.formattedSize} ($${validationResult.originalOrderValue.toFixed(2)} → $${validationResult.finalOrderValue.toFixed(2)})`);
+      });
     }
 
     return await this.walletClient!.order({
@@ -347,9 +347,9 @@ export class HyperliquidService {
     );
 
     if (validationResult.wasAdjusted) {
-      console.log(`   ⚠️  Adjusted SELL order size to meet $${this.minOrderValue} minimum:`);
-      console.log(`       ${initialFormattedSize} → ${validationResult.formattedSize} ${coin}`);
-      console.log(`       Order value: $${validationResult.originalOrderValue.toFixed(2)} → $${validationResult.finalOrderValue.toFixed(2)}`);
+      setImmediate(() => {
+        console.log(`   ⚠️  Adjusted ${coin}: ${initialFormattedSize} → ${validationResult.formattedSize} ($${validationResult.originalOrderValue.toFixed(2)} → $${validationResult.finalOrderValue.toFixed(2)})`);
+      });
     }
 
     return await this.walletClient!.order({
