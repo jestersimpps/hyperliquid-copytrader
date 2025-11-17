@@ -1,10 +1,10 @@
-import './setup';
-import { HyperliquidService } from './services/hyperliquid.service';
-import { ChartDataService } from './services/chart-data.service';
-import type { TimeFrame } from './models/ohlc.model';
+import '../../src/setup';
+import { HyperliquidService } from '../../src/services/hyperliquid.service';
+import { ChartDataService } from '../../src/services/chart-data.service';
+import type { TimeFrame } from '../../src/models/ohlc.model';
 import * as fs from 'fs';
 import * as path from 'path';
-import { loadConfig } from './config';
+import { loadConfig } from '../../src/config';
 
 const TESTING_DIR = path.resolve(process.cwd(), 'testing');
 

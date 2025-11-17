@@ -1,4 +1,4 @@
-import type { OHLCCandle, TimeFrame } from '../models/ohlc.model';
+import type { OHLCCandle, TimeFrame } from '../../src/models/ohlc.model';
 import type { BacktestConfig, BacktestResult, ActualTrade, OptimizationResult } from '../models/backtest.model';
 import { BacktesterService } from './backtester.service';
 import { TradeMatcherService } from './trade-matcher.service';

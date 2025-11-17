@@ -7,12 +7,12 @@
     "start": "tsx src/monitor.ts",
     "compare": "tsx src/index.ts",
     "build": "tsc",
-    "fetch-ohlc": "tsx src/fetch-aster-ohlc.ts",
-    "backtest": "tsx src/run-backtest.ts",
-    "prepare-ml-data": "python3 src/scripts/prepare-training-data.py",
-    "train-model": "python3 src/scripts/train-model.py",
-    "predict-trades": "python3 src/scripts/predict-trades.py",
-    "compare-ml": "tsx src/compare-ml-predictions.ts"
+    "fetch-ohlc": "tsx testing/scripts/fetch-ohlc.ts",
+    "backtest": "tsx testing/scripts/run-backtest.ts",
+    "prepare-ml-data": "python3 testing/scripts/ml/prepare-training-data.py",
+    "train-model": "python3 testing/scripts/ml/train-model.py",
+    "predict-trades": "python3 testing/scripts/ml/predict-trades.py",
+    "compare-ml": "tsx testing/scripts/compare-ml-predictions.ts"
   },
   "keywords": [],
   "author": "",

@@ -1,4 +1,4 @@
-import './setup';
+import '../../src/setup';
 import * as fs from 'fs';
 import * as path from 'path';
 

@@ -1,6 +1,6 @@
-import type { OHLCCandle } from '../models/ohlc.model';
+import type { OHLCCandle } from '../../src/models/ohlc.model';
 import type { BacktestConfig, SimulatedTrade } from '../models/backtest.model';
-import { IndicatorsService, type IndicatorValues } from './indicators.service';
+import { IndicatorsService, type IndicatorValues } from '../../src/services/indicators.service';
 
 interface Position {
   direction: 'long' | 'short';

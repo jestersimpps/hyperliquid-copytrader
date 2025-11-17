@@ -1,9 +1,9 @@
-import './setup';
+import '../../src/setup';
 import * as fs from 'fs';
 import * as path from 'path';
-import type { OHLCCandle, TimeFrame } from './models/ohlc.model';
-import type { ActualTrade } from './models/backtest.model';
-import { StrategyOptimizerService } from './services/strategy-optimizer.service';
+import type { OHLCCandle, TimeFrame } from '../../src/models/ohlc.model';
+import type { ActualTrade } from '../models/backtest.model';
+import { StrategyOptimizerService } from '../services/strategy-optimizer.service';
 
 const TESTING_DIR = path.resolve(process.cwd(), 'testing');
 
