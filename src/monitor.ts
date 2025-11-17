@@ -46,7 +46,7 @@ const processFill = async (
         break;
 
       case 'close':
-        orderResponse = await service.closePosition(action.coin, undefined, fillPrice);
+        orderResponse = await service.closePosition(action.coin, fillPrice);
         break;
 
       case 'add':
@@ -59,7 +59,7 @@ const processFill = async (
 
       case 'reverse':
         try {
-          await service.closePosition(action.coin, undefined, fillPrice);
+          await service.closePosition(action.coin, fillPrice);
         } catch (error) {
           // Position doesn't exist, continue
         }

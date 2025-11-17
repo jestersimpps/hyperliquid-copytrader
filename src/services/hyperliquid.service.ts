@@ -8,7 +8,6 @@ import {
 } from '@nktkas/hyperliquid';
 import { privateKeyToAccount } from 'viem/accounts';
 import type { Position, Order, Balance } from '../models';
-import { MidsCacheService } from './mids-cache.service';
 import { MetaCacheService } from './meta-cache.service';
 import { validateAndAdjustOrderSize } from '../utils/order-validation.utils';
 import { loadConfig } from '../config';
@@ -20,7 +19,6 @@ export class HyperliquidService {
   private walletClient: WalletClient | null = null;
   private isTestnet: boolean;
   private userAddress: string | null = null;
-  private midsCache: MidsCacheService;
   private metaCache: MetaCacheService;
   private initialized: boolean = false;
   private tickSizeCache: Map<string, number> = new Map();
@@ -45,7 +43,6 @@ export class HyperliquidService {
 
     this.publicClient = new PublicClient({ transport: httpTransport });
 
-    this.midsCache = new MidsCacheService(isTestnet);
     this.metaCache = new MetaCacheService(this.publicClient);
 
     if (privateKey && walletAddress) {
@@ -70,10 +67,7 @@ export class HyperliquidService {
       return;
     }
 
-    await Promise.all([
-      this.midsCache.initialize(),
-      this.metaCache.initialize()
-    ]);
+    await this.metaCache.initialize();
 
     this.loadTickSizeCache();
 
@@ -271,54 +265,25 @@ export class HyperliquidService {
     return size.toFixed(decimals);
   }
 
-  private async getMarketPrice(coin: string, isBuy: boolean): Promise<string> {
-    const mid = this.midsCache.getMid(coin);
-
-    if (!mid) {
-      const book = await this.publicClient.l2Book({ coin });
-      const levels = isBuy ? book.levels[1] : book.levels[0];
-      if (!levels || levels.length === 0) {
-        throw new Error(`No market price available for ${coin}`);
-      }
-      const price = parseFloat(levels[0].px);
-      const slippage = isBuy ? 1.005 : 0.995;
-      const adjustedPrice = price * slippage;
-      return await this.formatPrice(adjustedPrice, coin);
-    }
-
-    const slippage = isBuy ? 1.005 : 0.995;
-    const adjustedPrice = mid * slippage;
-    return await this.formatPrice(adjustedPrice, coin);
-  }
-
   private ensureWalletClient(): void {
     if (!this.walletClient) {
       throw new Error('Wallet client not initialized. Trading operations require private key.');
     }
   }
 
-  async placeMarketBuy(coin: string, size: number, fillPrice?: number): Promise<OrderResponse> {
+  async placeMarketBuy(coin: string, size: number, fillPrice: number): Promise<OrderResponse> {
     this.ensureWalletClient();
     const coinIndex = this.getCoinIndex(coin);
 
-    let orderPrice: number;
-    let priceString: string;
-
-    if (fillPrice) {
-      // Use the tracked wallet's fill price with slippage
-      orderPrice = fillPrice * 1.005;
-      priceString = await this.formatPrice(orderPrice, coin);
-    } else {
-      // Fallback to market price
-      priceString = await this.getMarketPrice(coin, true);
-      orderPrice = parseFloat(priceString);
-    }
+    // Use the tracked wallet's fill price with slippage
+    const orderPrice = fillPrice * 1.005;
+    const priceString = await this.formatPrice(orderPrice, coin);
 
     const sizeDecimals = this.getSizeDecimals(coin);
     const initialFormattedSize = this.formatSize(size, coin);
 
     // API validates using the base price without slippage
-    const validationPrice = fillPrice || (orderPrice / 1.005);
+    const validationPrice = fillPrice;
 
     const validationResult = validateAndAdjustOrderSize(
       size,
@@ -347,28 +312,19 @@ export class HyperliquidService {
     });
   }
 
-  async placeMarketSell(coin: string, size: number, fillPrice?: number): Promise<OrderResponse> {
+  async placeMarketSell(coin: string, size: number, fillPrice: number): Promise<OrderResponse> {
     this.ensureWalletClient();
     const coinIndex = this.getCoinIndex(coin);
 
-    let orderPrice: number;
-    let priceString: string;
-
-    if (fillPrice) {
-      // Use the tracked wallet's fill price with slippage
-      orderPrice = fillPrice * 0.995;
-      priceString = await this.formatPrice(orderPrice, coin);
-    } else {
-      // Fallback to market price
-      priceString = await this.getMarketPrice(coin, false);
-      orderPrice = parseFloat(priceString);
-    }
+    // Use the tracked wallet's fill price with slippage
+    const orderPrice = fillPrice * 0.995;
+    const priceString = await this.formatPrice(orderPrice, coin);
 
     const sizeDecimals = this.getSizeDecimals(coin);
     const initialFormattedSize = this.formatSize(size, coin);
 
     // API validates using the base price without slippage
-    const validationPrice = fillPrice || (orderPrice / 0.995);
+    const validationPrice = fillPrice;
 
     const validationResult = validateAndAdjustOrderSize(
       size,
@@ -397,15 +353,15 @@ export class HyperliquidService {
     });
   }
 
-  async openLong(coin: string, size: number, fillPrice?: number): Promise<OrderResponse> {
+  async openLong(coin: string, size: number, fillPrice: number): Promise<OrderResponse> {
     return await this.placeMarketBuy(coin, size, fillPrice);
   }
 
-  async openShort(coin: string, size: number, fillPrice?: number): Promise<OrderResponse> {
+  async openShort(coin: string, size: number, fillPrice: number): Promise<OrderResponse> {
     return await this.placeMarketSell(coin, size, fillPrice);
   }
 
-  async closePosition(coin: string, size?: number, fillPrice?: number): Promise<OrderResponse> {
+  async closePosition(coin: string, fillPrice: number, size?: number): Promise<OrderResponse> {
     this.ensureWalletClient();
     const positions = await this.getOpenPositions(this.userAddress!);
     const position = positions.find(p => p.coin === coin);
@@ -424,8 +380,8 @@ export class HyperliquidService {
     }
   }
 
-  async reducePosition(coin: string, reduceSize: number, fillPrice?: number): Promise<OrderResponse> {
-    return await this.closePosition(coin, reduceSize, fillPrice);
+  async reducePosition(coin: string, reduceSize: number, fillPrice: number): Promise<OrderResponse> {
+    return await this.closePosition(coin, fillPrice, reduceSize);
   }
 
   canExecuteTrades(): boolean {
@@ -434,7 +390,6 @@ export class HyperliquidService {
 
   async cleanup(): Promise<void> {
     this.saveTickSizeCache();
-    await this.midsCache.close();
     this.metaCache.clear();
     this.initialized = false;
   }
