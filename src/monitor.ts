@@ -43,35 +43,16 @@ const processFill = async (
       return { success: true, coin: fill.coin, action: action.action };
     }
 
-    const MIN_ORDER_VALUE = 10;
-    let adjustedSize = action.size;
-
-    // Check minimum order value
-    const estimatedPrice = parseFloat(fill.px);
-    const orderValue = action.size * estimatedPrice;
-
-    if (orderValue < MIN_ORDER_VALUE && action.action !== 'close') {
-      let executionPrice = estimatedPrice;
-      if (action.action === 'open' && action.side === 'long') {
-        executionPrice = estimatedPrice * 1.005;
-      } else if (action.action === 'reduce' || action.side === 'short') {
-        executionPrice = estimatedPrice * 0.995;
-      }
-
-      adjustedSize = MIN_ORDER_VALUE / executionPrice;
-      console.log(`   ⚠️  Adjusted size to meet $10 minimum: ${action.size.toFixed(4)} → ${adjustedSize.toFixed(4)}`);
-    }
-
     let orderResponse;
 
     switch (action.action) {
       case 'open':
         if (action.side === 'long') {
-          orderResponse = await service.openLong(action.coin, adjustedSize);
+          orderResponse = await service.openLong(action.coin, action.size);
         } else {
-          orderResponse = await service.openShort(action.coin, adjustedSize);
+          orderResponse = await service.openShort(action.coin, action.size);
         }
-        console.log(`   ✓ Executed: OPENED ${action.side.toUpperCase()} ${adjustedSize.toFixed(4)} ${action.coin}`);
+        console.log(`   ✓ Executed: OPENED ${action.side.toUpperCase()} ${action.size.toFixed(4)} ${action.coin}`);
         break;
 
       case 'close':
@@ -88,11 +69,11 @@ const processFill = async (
 
       case 'add':
         if (action.side === 'long') {
-          orderResponse = await service.openLong(action.coin, adjustedSize);
+          orderResponse = await service.openLong(action.coin, action.size);
         } else {
-          orderResponse = await service.openShort(action.coin, adjustedSize);
+          orderResponse = await service.openShort(action.coin, action.size);
         }
-        console.log(`   ✓ Executed: ADDED ${adjustedSize.toFixed(4)} ${action.coin}`);
+        console.log(`   ✓ Executed: ADDED ${action.size.toFixed(4)} ${action.coin}`);
         break;
 
       case 'reduce':
@@ -103,14 +84,14 @@ const processFill = async (
           return { success: true, coin: action.coin, action: 'reduce-skipped' };
         }
 
-        if (adjustedSize >= currentPosition.size) {
-          console.log(`   ⚠️  Reduce amount (${adjustedSize.toFixed(4)}) >= position size (${currentPosition.size.toFixed(4)})`);
+        if (action.size >= currentPosition.size) {
+          console.log(`   ⚠️  Reduce amount (${action.size.toFixed(4)}) >= position size (${currentPosition.size.toFixed(4)})`);
           console.log(`   → Closing 100% instead`);
           orderResponse = await service.closePosition(action.coin);
           console.log(`   ✓ Executed: CLOSED ${currentPosition.size.toFixed(4)} ${action.coin}`);
         } else {
-          orderResponse = await service.reducePosition(action.coin, adjustedSize);
-          console.log(`   ✓ Executed: REDUCED ${adjustedSize.toFixed(4)} ${action.coin}`);
+          orderResponse = await service.reducePosition(action.coin, action.size);
+          console.log(`   ✓ Executed: REDUCED ${action.size.toFixed(4)} ${action.coin}`);
         }
         break;
 
@@ -121,16 +102,16 @@ const processFill = async (
           console.log(`   ✓ Closed old ${oldPosition.side.toUpperCase()} position`);
         }
         if (action.side === 'long') {
-          orderResponse = await service.openLong(action.coin, adjustedSize);
+          orderResponse = await service.openLong(action.coin, action.size);
         } else {
-          orderResponse = await service.openShort(action.coin, adjustedSize);
+          orderResponse = await service.openShort(action.coin, action.size);
         }
-        console.log(`   ✓ Executed: OPENED new ${action.side.toUpperCase()} ${adjustedSize.toFixed(4)} ${action.coin}`);
+        console.log(`   ✓ Executed: OPENED new ${action.side.toUpperCase()} ${action.size.toFixed(4)} ${action.coin}`);
         break;
     }
 
     if (telegramService.isEnabled() && orderResponse) {
-      telegramService.sendMessage(`✅ Trade Executed\n\nCoin: ${action.coin}\nAction: ${action.action.toUpperCase()} ${action.side.toUpperCase()}\nSize: ${adjustedSize.toFixed(4)}\nPrice: $${parseFloat(fill.px).toFixed(4)}\n\n${action.reason}`).catch(() => {});
+      telegramService.sendMessage(`✅ Trade Executed\n\nCoin: ${action.coin}\nAction: ${action.action.toUpperCase()} ${action.side.toUpperCase()}\nSize: ${action.size.toFixed(4)}\nPrice: $${parseFloat(fill.px).toFixed(4)}\n\n${action.reason}`).catch(() => {});
     }
 
     return { success: true, coin: action.coin, action: action.action };
