@@ -176,12 +176,20 @@ export class HyperliquidService {
     };
   }
 
-  async getCoinIndex(coin: string): Promise<number> {
-    return await this.metaCache.getCoinIndex(coin);
+  getCoinIndex(coin: string): number {
+    const index = this.metaCache.getCoinIndexSync(coin);
+    if (index === null) {
+      throw new Error(`Coin ${coin} not found in metadata cache`);
+    }
+    return index;
   }
 
-  private async getSizeDecimals(coin: string): Promise<number> {
-    return await this.metaCache.getSizeDecimals(coin);
+  private getSizeDecimals(coin: string): number {
+    const decimals = this.metaCache.getSizeDecimalsSync(coin);
+    if (decimals === null) {
+      throw new Error(`Coin ${coin} not found in metadata cache`);
+    }
+    return decimals;
   }
 
   private async getTickSize(coin: string): Promise<number> {
@@ -258,8 +266,8 @@ export class HyperliquidService {
     return rounded.toFixed(decimals);
   }
 
-  async formatSize(size: number, coin: string): Promise<string> {
-    const decimals = await this.getSizeDecimals(coin);
+  formatSize(size: number, coin: string): string {
+    const decimals = this.getSizeDecimals(coin);
     return size.toFixed(decimals);
   }
 
@@ -267,15 +275,7 @@ export class HyperliquidService {
     const mid = this.midsCache.getMid(coin);
 
     if (!mid) {
-      const book = await this.publicClient.l2Book({ coin });
-      const levels = isBuy ? book.levels[1] : book.levels[0];
-      if (!levels || levels.length === 0) {
-        throw new Error(`No market price available for ${coin}`);
-      }
-      const price = parseFloat(levels[0].px);
-      const slippage = isBuy ? 1.005 : 0.995;
-      const adjustedPrice = price * slippage;
-      return await this.formatPrice(adjustedPrice, coin);
+      throw new Error(`No market price available for ${coin} in midsCache`);
     }
 
     const slippage = isBuy ? 1.005 : 0.995;
@@ -291,11 +291,11 @@ export class HyperliquidService {
 
   async placeMarketBuy(coin: string, size: number): Promise<OrderResponse> {
     this.ensureWalletClient();
-    const coinIndex = await this.getCoinIndex(coin);
+    const coinIndex = this.getCoinIndex(coin);
     const priceString = await this.getMarketPrice(coin, true);
     const orderPrice = parseFloat(priceString);
-    const sizeDecimals = await this.getSizeDecimals(coin);
-    const initialFormattedSize = await this.formatSize(size, coin);
+    const sizeDecimals = this.getSizeDecimals(coin);
+    const initialFormattedSize = this.formatSize(size, coin);
 
     // API validates using market price without slippage, so we need to validate against that
     const validationPrice = orderPrice / 1.005; // Remove the 0.5% slippage we added
@@ -329,11 +329,11 @@ export class HyperliquidService {
 
   async placeMarketSell(coin: string, size: number): Promise<OrderResponse> {
     this.ensureWalletClient();
-    const coinIndex = await this.getCoinIndex(coin);
+    const coinIndex = this.getCoinIndex(coin);
     const priceString = await this.getMarketPrice(coin, false);
     const orderPrice = parseFloat(priceString);
-    const sizeDecimals = await this.getSizeDecimals(coin);
-    const initialFormattedSize = await this.formatSize(size, coin);
+    const sizeDecimals = this.getSizeDecimals(coin);
+    const initialFormattedSize = this.formatSize(size, coin);
 
     // API validates using market price without slippage, so we need to validate against that
     const validationPrice = orderPrice / 0.995; // Remove the 0.5% slippage we added
