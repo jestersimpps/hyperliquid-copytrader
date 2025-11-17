@@ -105,14 +105,14 @@ const monitorTrackedWallet = async (
   let tradeHistoryService: TradeHistoryService | null = null;
   let webSocketFillsService: WebSocketFillsService | null = null;
   let lastBalanceUpdate = 0;
-  const BALANCE_UPDATE_INTERVAL = 5 * 60 * 1000;
+  const BALANCE_UPDATE_INTERVAL = 1 * 60 * 1000;
 
   console.log('\n🚀 Copy Trading Bot Started\n');
   console.log(`📊 Tracked Wallet: ${trackedWallet}`);
   if (userWallet) {
     console.log(`👤 Your Wallet: ${userWallet}`);
   }
-  console.log(`⚡ Mode: Real-time WebSocket (Balance updates every 5min)\n`);
+  console.log(`⚡ Mode: Real-time WebSocket (Balance updates every 1min)\n`);
 
   if (telegramService.isEnabled()) {
     await telegramService.sendMonitoringStarted(trackedWallet, userWallet);
