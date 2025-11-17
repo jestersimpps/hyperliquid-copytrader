@@ -1,5 +1,5 @@
-import { Position } from '@/models/position.model';
-import { loadConfig } from '@/config';
+import { Position } from '../models/position.model';
+import { loadConfig } from '../config';
 
 export interface UnderwaterPosition {
   position: Position;
