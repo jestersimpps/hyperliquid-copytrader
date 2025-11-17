@@ -147,8 +147,16 @@ const monitorTrackedWallet = async (
                     break;
 
                   case 'close':
-                    orderResponse = await service.closePosition(action.coin, adjustedSize);
-                    console.log(`   ✓ Executed: CLOSED ${adjustedSize.toFixed(4)} ${action.coin}`);
+                    // Safety check: only close if we actually have the position
+                    const posToClose = userPositions.find(p => p.coin === action.coin);
+
+                    if (!posToClose) {
+                      console.log(`   ⚠️  Skipping CLOSE - you don't have ${action.coin} position`);
+                      break;
+                    }
+
+                    orderResponse = await service.closePosition(action.coin);
+                    console.log(`   ✓ Executed: CLOSED ${posToClose.size.toFixed(4)} ${action.coin}`);
                     break;
 
                   case 'add':
@@ -161,8 +169,24 @@ const monitorTrackedWallet = async (
                     break;
 
                   case 'reduce':
-                    orderResponse = await service.reducePosition(action.coin, adjustedSize);
-                    console.log(`   ✓ Executed: REDUCED ${adjustedSize.toFixed(4)} ${action.coin}`);
+                    // Safety check: don't reduce more than we have
+                    const currentPosition = userPositions.find(p => p.coin === action.coin);
+
+                    if (!currentPosition) {
+                      console.log(`   ⚠️  Skipping REDUCE - you don't have ${action.coin} position`);
+                      break;
+                    }
+
+                    if (adjustedSize >= currentPosition.size) {
+                      // If trying to reduce more than we have, just close 100%
+                      console.log(`   ⚠️  Reduce amount (${adjustedSize.toFixed(4)}) >= position size (${currentPosition.size.toFixed(4)})`);
+                      console.log(`   → Closing 100% instead`);
+                      orderResponse = await service.closePosition(action.coin);
+                      console.log(`   ✓ Executed: CLOSED ${currentPosition.size.toFixed(4)} ${action.coin}`);
+                    } else {
+                      orderResponse = await service.reducePosition(action.coin, adjustedSize);
+                      console.log(`   ✓ Executed: REDUCED ${adjustedSize.toFixed(4)} ${action.coin}`);
+                    }
                     break;
 
                   case 'reverse':
