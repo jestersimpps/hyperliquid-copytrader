@@ -6,7 +6,13 @@
   "scripts": {
     "start": "tsx src/monitor.ts",
     "compare": "tsx src/index.ts",
-    "build": "tsc"
+    "build": "tsc",
+    "fetch-ohlc": "tsx src/fetch-aster-ohlc.ts",
+    "backtest": "tsx src/run-backtest.ts",
+    "prepare-ml-data": "python3 src/scripts/prepare-training-data.py",
+    "train-model": "python3 src/scripts/train-model.py",
+    "predict-trades": "python3 src/scripts/predict-trades.py",
+    "compare-ml": "tsx src/compare-ml-predictions.ts"
   },
   "keywords": [],
   "author": "",
