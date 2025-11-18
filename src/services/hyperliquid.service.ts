@@ -271,7 +271,7 @@ export class HyperliquidService {
     }
   }
 
-  async placeMarketBuy(coin: string, size: number, fillPrice: number): Promise<OrderResponse> {
+  async placeMarketBuy(coin: string, size: number, fillPrice: number, reduceOnly: boolean = false): Promise<OrderResponse> {
     this.ensureWalletClient();
     const coinIndex = this.getCoinIndex(coin);
 
@@ -305,14 +305,14 @@ export class HyperliquidService {
         b: true,
         p: priceString,
         s: validationResult.formattedSize,
-        r: false,
+        r: reduceOnly,
         t: { limit: { tif: 'Ioc' } }
       }],
       grouping: 'na'
     });
   }
 
-  async placeMarketSell(coin: string, size: number, fillPrice: number): Promise<OrderResponse> {
+  async placeMarketSell(coin: string, size: number, fillPrice: number, reduceOnly: boolean = false): Promise<OrderResponse> {
     this.ensureWalletClient();
     const coinIndex = this.getCoinIndex(coin);
 
@@ -346,7 +346,7 @@ export class HyperliquidService {
         b: false,
         p: priceString,
         s: validationResult.formattedSize,
-        r: false,
+        r: reduceOnly,
         t: { limit: { tif: 'Ioc' } }
       }],
       grouping: 'na'
@@ -379,9 +379,9 @@ export class HyperliquidService {
     const isLong = position.side === 'long';
 
     if (isLong) {
-      return await this.placeMarketSell(coin, closeSize, fillPrice);
+      return await this.placeMarketSell(coin, closeSize, fillPrice, true);
     } else {
-      return await this.placeMarketBuy(coin, closeSize, fillPrice);
+      return await this.placeMarketBuy(coin, closeSize, fillPrice, true);
     }
   }
 
