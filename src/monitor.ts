@@ -190,6 +190,40 @@ const monitorTrackedWallet = async (
       }
     }
 
+    const MIN_POSITION_VALUE = 10;
+    for (const position of userPositions) {
+      const notionalValue = position.size * position.markPrice;
+
+      if (notionalValue < MIN_POSITION_VALUE && service.canExecuteTrades()) {
+        try {
+          console.log(`🧹 Auto-closing small position: ${position.coin} (${position.side}) - $${notionalValue.toFixed(2)} notional value`);
+
+          await service.closePosition(position.coin, position.markPrice);
+
+          console.log(`✓ Closed small position: ${position.coin}\n`);
+
+          if (telegramService.isEnabled()) {
+            await telegramService.sendMessage(
+              `🧹 Auto-closed small position:\n` +
+              `${position.coin} ${position.side.toUpperCase()}\n` +
+              `Size: ${position.size.toFixed(4)}\n` +
+              `Notional: $${notionalValue.toFixed(2)}\n` +
+              `PnL: $${position.unrealizedPnl.toFixed(2)}`
+            );
+          }
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          console.error(`✗ Failed to close small position ${position.coin}: ${errorMessage}`);
+
+          if (telegramService.isEnabled()) {
+            await telegramService.sendError(
+              `Failed to auto-close small position ${position.coin}: ${errorMessage}`
+            );
+          }
+        }
+      }
+    }
+
     lastBalanceUpdate = Date.now();
   };
 
