@@ -155,10 +155,10 @@ const monitorTrackedWallet = async (
 
     snapshotLogger.logSnapshot(
       trackedWallet,
-      parseFloat(trackedBalance.accountValue),
+      trackedBalance,
       trackedPositions,
       userWallet,
-      parseFloat(userBalance.accountValue),
+      userBalance,
       userPositions,
       newRatio
     );

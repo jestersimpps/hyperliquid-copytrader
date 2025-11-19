@@ -1,23 +1,49 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import type { Position } from '../models';
+import type { Position, Balance } from '../models';
 
 interface BalanceSnapshot {
   timestamp: number;
   date: string;
   tracked: {
     address: string;
-    balance: number;
+    accountValue: number;
+    withdrawable: number;
+    totalMarginUsed: number;
+    crossMaintenanceMarginUsed: number;
+    totalNtlPos: number;
+    totalRawUsd: number;
+    totalUnrealizedPnl: number;
+    crossMarginSummary: {
+      accountValue: number;
+      totalNtlPos: number;
+      totalRawUsd: number;
+      totalMarginUsed: number;
+    };
     positions: PositionSnapshot[];
-    totalNotional: number;
     positionCount: number;
+    crossMarginRatio: number;
+    averageLeverage: number;
   };
   user: {
     address: string;
-    balance: number;
+    accountValue: number;
+    withdrawable: number;
+    totalMarginUsed: number;
+    crossMaintenanceMarginUsed: number;
+    totalNtlPos: number;
+    totalRawUsd: number;
+    totalUnrealizedPnl: number;
+    crossMarginSummary: {
+      accountValue: number;
+      totalNtlPos: number;
+      totalRawUsd: number;
+      totalMarginUsed: number;
+    };
     positions: PositionSnapshot[];
-    totalNotional: number;
     positionCount: number;
+    crossMarginRatio: number;
+    averageLeverage: number;
   };
   balanceRatio: number;
 }
@@ -65,16 +91,28 @@ export class SnapshotLoggerService {
     }));
   }
 
-  private calculateTotalNotional(positions: Position[]): number {
-    return positions.reduce((sum, p) => sum + (p.size * p.markPrice), 0);
+  private calculateTotalPnl(positions: Position[]): number {
+    return positions.reduce((sum, p) => sum + p.unrealizedPnl, 0);
+  }
+
+  private calculateAverageLeverage(positions: Position[]): number {
+    if (positions.length === 0) return 0;
+    const totalLeverage = positions.reduce((sum, p) => sum + p.leverage, 0);
+    return totalLeverage / positions.length;
+  }
+
+  private calculateCrossMarginRatio(balance: Balance): number {
+    const maintMargin = parseFloat(balance.crossMaintenanceMarginUsed);
+    const accountValue = parseFloat(balance.crossMarginSummary.accountValue);
+    return accountValue > 0 ? (maintMargin / accountValue) * 100 : 0;
   }
 
   logSnapshot(
     trackedWallet: string,
-    trackedBalance: number,
+    trackedBalance: Balance,
     trackedPositions: Position[],
     userWallet: string,
-    userBalance: number,
+    userBalance: Balance,
     userPositions: Position[],
     balanceRatio: number
   ): void {
@@ -83,17 +121,43 @@ export class SnapshotLoggerService {
       date: new Date().toISOString(),
       tracked: {
         address: trackedWallet,
-        balance: trackedBalance,
+        accountValue: parseFloat(trackedBalance.accountValue),
+        withdrawable: parseFloat(trackedBalance.withdrawable),
+        totalMarginUsed: parseFloat(trackedBalance.totalMarginUsed),
+        crossMaintenanceMarginUsed: parseFloat(trackedBalance.crossMaintenanceMarginUsed),
+        totalNtlPos: parseFloat(trackedBalance.totalNtlPos),
+        totalRawUsd: parseFloat(trackedBalance.totalRawUsd),
+        totalUnrealizedPnl: this.calculateTotalPnl(trackedPositions),
+        crossMarginSummary: {
+          accountValue: parseFloat(trackedBalance.crossMarginSummary.accountValue),
+          totalNtlPos: parseFloat(trackedBalance.crossMarginSummary.totalNtlPos),
+          totalRawUsd: parseFloat(trackedBalance.crossMarginSummary.totalRawUsd),
+          totalMarginUsed: parseFloat(trackedBalance.crossMarginSummary.totalMarginUsed)
+        },
         positions: this.formatPositions(trackedPositions),
-        totalNotional: this.calculateTotalNotional(trackedPositions),
-        positionCount: trackedPositions.length
+        positionCount: trackedPositions.length,
+        crossMarginRatio: this.calculateCrossMarginRatio(trackedBalance),
+        averageLeverage: this.calculateAverageLeverage(trackedPositions)
       },
       user: {
         address: userWallet,
-        balance: userBalance,
+        accountValue: parseFloat(userBalance.accountValue),
+        withdrawable: parseFloat(userBalance.withdrawable),
+        totalMarginUsed: parseFloat(userBalance.totalMarginUsed),
+        crossMaintenanceMarginUsed: parseFloat(userBalance.crossMaintenanceMarginUsed),
+        totalNtlPos: parseFloat(userBalance.totalNtlPos),
+        totalRawUsd: parseFloat(userBalance.totalRawUsd),
+        totalUnrealizedPnl: this.calculateTotalPnl(userPositions),
+        crossMarginSummary: {
+          accountValue: parseFloat(userBalance.crossMarginSummary.accountValue),
+          totalNtlPos: parseFloat(userBalance.crossMarginSummary.totalNtlPos),
+          totalRawUsd: parseFloat(userBalance.crossMarginSummary.totalRawUsd),
+          totalMarginUsed: parseFloat(userBalance.crossMarginSummary.totalMarginUsed)
+        },
         positions: this.formatPositions(userPositions),
-        totalNotional: this.calculateTotalNotional(userPositions),
-        positionCount: userPositions.length
+        positionCount: userPositions.length,
+        crossMarginRatio: this.calculateCrossMarginRatio(userBalance),
+        averageLeverage: this.calculateAverageLeverage(userPositions)
       },
       balanceRatio
     };

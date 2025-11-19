@@ -164,9 +164,19 @@ export class HyperliquidService {
     });
 
     return {
+      accountValue: state.marginSummary.accountValue,
       withdrawable: state.withdrawable,
-      marginUsed: (state as any).marginUsed || '0',
-      accountValue: state.marginSummary.accountValue
+      totalMarginUsed: state.marginSummary.totalMarginUsed,
+      crossMaintenanceMarginUsed: state.crossMaintenanceMarginUsed,
+      totalNtlPos: state.marginSummary.totalNtlPos,
+      totalRawUsd: state.marginSummary.totalRawUsd,
+      crossMarginSummary: {
+        accountValue: state.crossMarginSummary.accountValue,
+        totalNtlPos: state.crossMarginSummary.totalNtlPos,
+        totalRawUsd: state.crossMarginSummary.totalRawUsd,
+        totalMarginUsed: state.crossMarginSummary.totalMarginUsed
+      },
+      timestamp: state.time
     };
   }
 
