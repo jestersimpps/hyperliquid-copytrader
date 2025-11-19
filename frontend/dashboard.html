@@ -190,64 +190,58 @@
       }
     }
 
-    .positions-table-container {
-      max-height: 600px;
-      overflow-y: auto;
-      margin-top: 15px;
-    }
+    @media (max-width: 768px) {
+      body {
+        padding: 10px;
+      }
 
-    .positions-table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 0.9em;
-    }
+      h1 {
+        font-size: 1.8em;
+      }
 
-    .positions-table thead {
-      position: sticky;
-      top: 0;
-      background: #192734;
-      z-index: 10;
-    }
+      .subtitle {
+        font-size: 0.95em;
+      }
 
-    .positions-table th {
-      padding: 12px 8px;
-      text-align: left;
-      font-weight: 600;
-      color: #8899a6;
-      border-bottom: 2px solid #38444d;
-      white-space: nowrap;
-    }
+      .stats-grid {
+        grid-template-columns: 1fr;
+        gap: 10px;
+      }
 
-    .positions-table td {
-      padding: 10px 8px;
-      border-bottom: 1px solid #38444d;
-    }
+      .stat-card {
+        padding: 15px;
+      }
 
-    .positions-table tbody tr:hover {
-      background: rgba(102, 126, 234, 0.1);
-    }
+      .stat-value {
+        font-size: 1.5em;
+      }
 
-    .side-long {
-      color: #17bf63;
-      font-weight: bold;
-    }
+      .charts-row {
+        grid-template-columns: 1fr;
+      }
 
-    .side-short {
-      color: #e0245e;
-      font-weight: bold;
-    }
+      .chart-container {
+        padding: 15px;
+      }
 
-    .pnl-positive {
-      color: #17bf63;
-    }
+      .chart-title {
+        font-size: 1.1em;
+      }
 
-    .pnl-negative {
-      color: #e0245e;
-    }
+      .controls {
+        flex-direction: column;
+        align-items: stretch;
+        padding: 15px;
+      }
 
-    .timestamp-cell {
-      color: #8899a6;
-      font-size: 0.85em;
+      .control-group {
+        width: 100%;
+      }
+
+      select, button {
+        width: 100%;
+        padding: 12px 15px;
+      }
     }
   </style>
 </head>
@@ -359,57 +353,9 @@
       <div id="drawdown-chart"></div>
     </div>
 
-    <div class="charts-row">
-      <div class="chart-container">
-        <div class="chart-title">
-          <span class="wallet-indicator tracked-wallet"></span>Tracked Wallet Positions
-        </div>
-        <div class="positions-table-container">
-          <table class="positions-table">
-            <thead>
-              <tr>
-                <th>Time</th>
-                <th>Coin</th>
-                <th>Side</th>
-                <th>Size</th>
-                <th>Entry</th>
-                <th>Mark</th>
-                <th>Notional</th>
-                <th>PNL</th>
-                <th>Leverage</th>
-              </tr>
-            </thead>
-            <tbody id="tracked-positions-table">
-              <tr><td colspan="9" style="text-align: center; color: #8899a6;">Loading...</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-      <div class="chart-container">
-        <div class="chart-title">
-          <span class="wallet-indicator user-wallet"></span>User Wallet Positions
-        </div>
-        <div class="positions-table-container">
-          <table class="positions-table">
-            <thead>
-              <tr>
-                <th>Time</th>
-                <th>Coin</th>
-                <th>Side</th>
-                <th>Size</th>
-                <th>Entry</th>
-                <th>Mark</th>
-                <th>Notional</th>
-                <th>PNL</th>
-                <th>Leverage</th>
-              </tr>
-            </thead>
-            <tbody id="user-positions-table">
-              <tr><td colspan="9" style="text-align: center; color: #8899a6;">Loading...</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
+    <div class="chart-container">
+      <div class="chart-title">Entry Price Difference (User vs Tracked)</div>
+      <div id="entry-diff-chart"></div>
     </div>
 
     <div class="chart-container">
@@ -501,8 +447,8 @@
       renderBalanceChart();
       renderPnlChart();
       renderPositionSizeCharts();
+      renderEntryDiffChart();
       renderDrawdownChart();
-      renderPositionTables();
       renderRiskChart();
     }
 
@@ -787,61 +733,75 @@
       return drawdowns;
     }
 
-    function renderPositionTables() {
-      const allTrackedPositions = [];
-      const allUserPositions = [];
+    function renderEntryDiffChart() {
+      const entryDiffByTime = {};
+      const allCoins = new Set();
 
       filteredSnapshots.forEach(snapshot => {
         const timestamp = new Date(snapshot.timestamp);
+        entryDiffByTime[timestamp] = {};
+
+        const trackedPositions = {};
+        const userPositions = {};
 
         snapshot.tracked.positions.forEach(pos => {
-          allTrackedPositions.push({
-            timestamp,
-            ...pos
-          });
+          trackedPositions[pos.coin] = pos.entryPrice;
+          allCoins.add(pos.coin);
         });
 
         snapshot.user.positions.forEach(pos => {
-          allUserPositions.push({
-            timestamp,
-            ...pos
-          });
+          userPositions[pos.coin] = pos.entryPrice;
+          allCoins.add(pos.coin);
+        });
+
+        allCoins.forEach(coin => {
+          if (trackedPositions[coin] && userPositions[coin]) {
+            entryDiffByTime[timestamp][coin] = userPositions[coin] - trackedPositions[coin];
+          }
         });
       });
 
-      const last100Tracked = allTrackedPositions.slice(-100).reverse();
-      const last100User = allUserPositions.slice(-100).reverse();
+      const timestamps = Object.keys(entryDiffByTime).map(t => new Date(t));
 
-      renderPositionTable('tracked-positions-table', last100Tracked);
-      renderPositionTable('user-positions-table', last100User);
-    }
+      const colorPalette = [
+        '#667eea', '#17bf63', '#e0245e', '#ff6b9d', '#ffad1f', '#1da1f2',
+        '#794bc4', '#f91880', '#00ba7c', '#ffb700', '#8b9dc3', '#c0deed'
+      ];
 
-    function renderPositionTable(tableId, positions) {
-      const tbody = document.getElementById(tableId);
+      const traces = Array.from(allCoins).map((coin, idx) => ({
+        x: timestamps,
+        y: timestamps.map(t => entryDiffByTime[t][coin] || null),
+        name: coin,
+        type: 'scatter',
+        mode: 'lines+markers',
+        line: {
+          color: colorPalette[idx % colorPalette.length],
+          width: 2
+        },
+        marker: { size: 4 },
+        connectgaps: false
+      }));
 
-      if (positions.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; color: #8899a6;">No positions found</td></tr>';
-        return;
-      }
+      const layout = {
+        ...plotLayout,
+        yaxis: {
+          ...plotLayout.yaxis,
+          title: 'Entry Price Difference (USD)',
+          tickformat: '$,.2f',
+          zeroline: true,
+          zerolinecolor: '#38444d',
+          zerolinewidth: 2
+        },
+        legend: {
+          x: 1.02,
+          y: 1,
+          xanchor: 'left',
+          yanchor: 'top',
+          font: { size: 10 }
+        }
+      };
 
-      tbody.innerHTML = positions.map(pos => {
-        const pnlClass = pos.unrealizedPnl >= 0 ? 'pnl-positive' : 'pnl-negative';
-        const sideClass = pos.side.toLowerCase() === 'long' ? 'side-long' : 'side-short';
-
-        return `
-          <tr>
-            <td class="timestamp-cell">${pos.timestamp.toLocaleTimeString()}</td>
-            <td><strong>${pos.coin}</strong></td>
-            <td class="${sideClass}">${pos.side.toUpperCase()}</td>
-            <td>${pos.size.toFixed(4)}</td>
-            <td>$${pos.entryPrice.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
-            <td>$${pos.markPrice.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
-            <td>$${pos.notionalValue.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
-            <td class="${pnlClass}">$${pos.unrealizedPnl.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
-            <td>${pos.leverage.toFixed(1)}x</td>
-          </tr>
-        `;
-      }).join('');
+      Plotly.newPlot('entry-diff-chart', traces, layout, plotConfig);
     }
 
     function renderRiskChart() {
