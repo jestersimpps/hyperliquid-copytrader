@@ -13,6 +13,11 @@ export interface Config {
   minOrderValue: number;
   alertThresholdPercent: number;
   alertCooldownMs: number;
+  dailyLossThresholds: number[];
+  marginWarningThreshold: number;
+  balanceDropThresholds: number[];
+  positionSizeInfoThreshold: number;
+  riskAlertCooldownMs: number;
 }
 
 const validateWalletAddress = (address: string | undefined, name: string): string | null => {
@@ -46,6 +51,16 @@ export const loadConfig = (): Config => {
   const alertThresholdPercent = process.env.ALERT_THRESHOLD_PERCENT ? parseFloat(process.env.ALERT_THRESHOLD_PERCENT) : 10;
   const alertCooldownMs = process.env.ALERT_COOLDOWN_MS ? parseInt(process.env.ALERT_COOLDOWN_MS) : 5 * 60 * 1000;
 
+  const dailyLossThresholds = process.env.DAILY_LOSS_THRESHOLDS
+    ? process.env.DAILY_LOSS_THRESHOLDS.split(',').map(Number)
+    : [5, 10, 15, 20];
+  const marginWarningThreshold = process.env.MARGIN_WARNING_THRESHOLD ? parseFloat(process.env.MARGIN_WARNING_THRESHOLD) : 15;
+  const balanceDropThresholds = process.env.BALANCE_DROP_THRESHOLDS
+    ? process.env.BALANCE_DROP_THRESHOLDS.split(',').map(Number)
+    : [5, 10, 15, 20];
+  const positionSizeInfoThreshold = process.env.POSITION_SIZE_INFO_THRESHOLD ? parseFloat(process.env.POSITION_SIZE_INFO_THRESHOLD) : 50;
+  const riskAlertCooldownMs = process.env.RISK_ALERT_COOLDOWN_MS ? parseInt(process.env.RISK_ALERT_COOLDOWN_MS) : 30 * 60 * 1000;
+
   return {
     privateKey,
     userWallet,
@@ -55,7 +70,12 @@ export const loadConfig = (): Config => {
     telegramChatId,
     minOrderValue,
     alertThresholdPercent,
-    alertCooldownMs
+    alertCooldownMs,
+    dailyLossThresholds,
+    marginWarningThreshold,
+    balanceDropThresholds,
+    positionSizeInfoThreshold,
+    riskAlertCooldownMs
   };
 };
 

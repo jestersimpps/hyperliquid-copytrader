@@ -101,6 +101,10 @@ export class TelegramService {
       const userWithdrawable = parseFloat(this.stats.userBalance.withdrawable);
       const userPnlData = await this.calculatePnlSinceMidnight(userAccountValue, 'user');
 
+      const marginRatio = userAccountValue > 0
+        ? (this.stats.userBalance.crossMaintenanceMarginUsed / userAccountValue) * 100
+        : 0;
+
       message += '*YOUR ACCOUNT*\n';
       message += `Address: \`${this.formatAddress(this.stats.userWallet)}\`\n`;
       message += `Balance: $${userAccountValue.toFixed(2)} ($${userWithdrawable.toFixed(2)} withdrawable)\n`;
@@ -108,7 +112,8 @@ export class TelegramService {
         const sign = userPnlData.pnl >= 0 ? '+' : '';
         message += `PNL Today: ${sign}$${userPnlData.pnl.toFixed(2)} (${sign}${userPnlData.percentage.toFixed(2)}%)\n`;
       }
-      message += `Balance Ratio: 1:${this.stats.balanceRatio.toFixed(4)}\n\n`;
+      message += `Balance Ratio: 1:${this.stats.balanceRatio.toFixed(4)}\n`;
+      message += `Margin Usage: ${marginRatio.toFixed(2)}%\n\n`;
     }
 
     if (this.stats.userPositions.length > 0) {
@@ -236,6 +241,83 @@ export class TelegramService {
       `*Unrealized PnL:* $${unrealizedPnl.toFixed(2)}\n` +
       `*Loss:* ${percentOfAccount.toFixed(2)}% of account\n` +
       `*Last Trade:* ${timeAgo}`;
+
+    await this.sendMessage(message);
+  }
+
+  async sendDailyLossWarning(
+    threshold: number,
+    lossPercent: number,
+    lossAmount: number,
+    currentBalance: number
+  ): Promise<void> {
+    if (!this.enabled) return;
+
+    const emoji = lossPercent >= 15 ? '🔴' : '⚠️';
+    const message =
+      `${emoji} *Daily Loss Warning*\n\n` +
+      `*Loss Threshold:* ${threshold}% reached\n` +
+      `*Actual Loss:* ${lossPercent.toFixed(2)}%\n` +
+      `*Amount Lost:* $${lossAmount.toFixed(2)}\n` +
+      `*Current Balance:* $${currentBalance.toFixed(2)}\n\n` +
+      `_Consider reducing position sizes or taking a break_`;
+
+    await this.sendMessage(message);
+  }
+
+  async sendBalanceDropAlert(
+    threshold: number,
+    dropPercent: number,
+    dropAmount: number,
+    peakBalance: number,
+    currentBalance: number
+  ): Promise<void> {
+    if (!this.enabled) return;
+
+    const emoji = dropPercent >= 15 ? '🔴' : '⚠️';
+    const message =
+      `${emoji} *Balance Drop Alert*\n\n` +
+      `*Drop:* ${dropPercent.toFixed(2)}% from daily high\n` +
+      `*Peak Balance:* $${peakBalance.toFixed(2)}\n` +
+      `*Current Balance:* $${currentBalance.toFixed(2)}\n` +
+      `*Amount Lost:* $${dropAmount.toFixed(2)}`;
+
+    await this.sendMessage(message);
+  }
+
+  async sendMarginUsageWarning(
+    marginRatio: number,
+    marginUsed: number,
+    accountValue: number
+  ): Promise<void> {
+    if (!this.enabled) return;
+
+    const message =
+      '⚠️ *High Margin Usage*\n\n' +
+      `*Margin Ratio:* ${marginRatio.toFixed(2)}%\n` +
+      `*Margin Used:* $${marginUsed.toFixed(2)}\n` +
+      `*Account Value:* $${accountValue.toFixed(2)}\n` +
+      `*Available:* $${(accountValue - marginUsed).toFixed(2)}\n\n` +
+      `_Consider reducing leverage or closing positions_`;
+
+    await this.sendMessage(message);
+  }
+
+  async sendPositionSizeInfo(
+    coin: string,
+    notionalValue: number,
+    percentOfAccount: number,
+    accountValue: number
+  ): Promise<void> {
+    if (!this.enabled) return;
+
+    const message =
+      '📊 *Large Position Alert*\n\n' +
+      `*Coin:* ${coin}\n` +
+      `*Position Size:* $${notionalValue.toFixed(2)}\n` +
+      `*% of Account:* ${percentOfAccount.toFixed(2)}%\n` +
+      `*Account Value:* $${accountValue.toFixed(2)}\n\n` +
+      `_FYI: Single position is ${percentOfAccount.toFixed(0)}% of your account_`;
 
     await this.sendMessage(message);
   }

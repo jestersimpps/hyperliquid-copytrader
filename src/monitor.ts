@@ -5,6 +5,7 @@ import { WebSocketFillsService } from './services/websocket-fills.service';
 import { TelegramService } from './services/telegram.service';
 import { PositionMonitorService } from './services/position-monitor.service';
 import { SnapshotLoggerService } from './services/snapshot-logger.service';
+import { RiskMonitorService } from './services/risk-monitor.service';
 import { calculateBalanceRatio } from './utils/scaling.utils';
 import { loadConfig } from './config';
 
@@ -115,6 +116,7 @@ const monitorTrackedWallet = async (
   const lastTradeTimes = new Map<string, number>();
   const positionMonitor = new PositionMonitorService();
   const snapshotLogger = new SnapshotLoggerService();
+  const riskMonitor = new RiskMonitorService(config);
 
   console.log('\n🚀 Copy Trading Bot Started\n');
   console.log(`📊 Tracked Wallet: ${trackedWallet}`);
@@ -199,6 +201,57 @@ const monitorTrackedWallet = async (
           position.unrealizedPnl,
           percentOfAccount,
           lastTradeTime
+        );
+      }
+
+      if (isFirstRun) {
+        riskMonitor.initializeDailyTracking(parseFloat(userBalance.accountValue));
+      }
+
+      if (riskMonitor.checkDailyReset()) {
+        riskMonitor.initializeDailyTracking(parseFloat(userBalance.accountValue));
+      }
+
+      const dailyLoss = riskMonitor.checkDailyLoss(parseFloat(userBalance.accountValue));
+      if (dailyLoss) {
+        await telegramService.sendDailyLossWarning(
+          dailyLoss.threshold,
+          dailyLoss.lossPercent,
+          dailyLoss.lossAmount,
+          parseFloat(userBalance.accountValue)
+        );
+      }
+
+      const balanceDrop = riskMonitor.checkBalanceDrop(parseFloat(userBalance.accountValue));
+      if (balanceDrop) {
+        await telegramService.sendBalanceDropAlert(
+          balanceDrop.threshold,
+          balanceDrop.dropPercent,
+          balanceDrop.dropAmount,
+          balanceDrop.peakBalance,
+          parseFloat(userBalance.accountValue)
+        );
+      }
+
+      const marginWarning = riskMonitor.checkMarginUsage(userBalance);
+      if (marginWarning) {
+        await telegramService.sendMarginUsageWarning(
+          marginWarning.marginRatio,
+          marginWarning.marginUsed,
+          marginWarning.accountValue
+        );
+      }
+
+      const positionSizeInfo = riskMonitor.checkPositionSize(
+        userPositions,
+        parseFloat(userBalance.accountValue)
+      );
+      if (positionSizeInfo) {
+        await telegramService.sendPositionSizeInfo(
+          positionSizeInfo.coin,
+          positionSizeInfo.notionalValue,
+          positionSizeInfo.percentOfAccount,
+          parseFloat(userBalance.accountValue)
         );
       }
     }
