@@ -17,6 +17,8 @@
       background: #0f1419;
       color: #e1e8ed;
       padding: 20px;
+      overflow-x: hidden;
+      max-width: 100vw;
     }
 
     .header {
@@ -211,6 +213,12 @@
 
       .chart-container {
         padding: 15px;
+        overflow-x: auto;
+        max-width: 100%;
+      }
+
+      .chart-container > div {
+        min-width: 100%;
       }
 
       .chart-title {
