@@ -192,19 +192,9 @@ const monitorTrackedWallet = async (
     }
 
     const trackedCoins = new Set(trackedPositions.map(p => p.coin));
-    const TRADE_COOLDOWN_MS = 2 * 60 * 1000;
-    const now = Date.now();
 
     for (const position of userPositions) {
       if (trackedCoins.has(position.coin)) {
-        continue;
-      }
-
-      const lastTradeTime = lastTradeTimes.get(position.coin) || 0;
-      const timeSinceLastTrade = now - lastTradeTime;
-
-      if (timeSinceLastTrade < TRADE_COOLDOWN_MS) {
-        console.log(`⏳ Skipping orphan check for ${position.coin} - recently traded (${Math.round(timeSinceLastTrade / 1000)}s ago)`);
         continue;
       }
 
@@ -218,7 +208,7 @@ const monitorTrackedWallet = async (
 
           console.log(`✓ Closed orphan position: ${position.coin}\n`);
 
-          lastTradeTimes.set(position.coin, now);
+          lastTradeTimes.set(position.coin, Date.now());
 
           if (telegramService.isEnabled()) {
             await telegramService.sendMessage(
