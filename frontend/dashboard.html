@@ -285,6 +285,18 @@
         <div class="stat-value" id="user-pnl">$0</div>
       </div>
       <div class="stat-card">
+        <div class="stat-label">
+          <span class="wallet-indicator tracked-wallet"></span>Tracked Daily PNL
+        </div>
+        <div class="stat-value" id="tracked-daily-pnl">$0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">
+          <span class="wallet-indicator user-wallet"></span>User Daily PNL
+        </div>
+        <div class="stat-value" id="user-daily-pnl">$0</div>
+      </div>
+      <div class="stat-card">
         <div class="stat-label">Total Snapshots</div>
         <div class="stat-value" id="snapshot-count">0</div>
       </div>
@@ -471,7 +483,42 @@
       trackedPnlEl.className = `stat-value ${trackedPnl >= 0 ? 'positive' : 'negative'}`;
       userPnlEl.className = `stat-value ${userPnl >= 0 ? 'positive' : 'negative'}`;
 
+      const dailyPnl = calculateDailyPnl();
+
+      const trackedDailyPnlEl = document.getElementById('tracked-daily-pnl');
+      const userDailyPnlEl = document.getElementById('user-daily-pnl');
+
+      trackedDailyPnlEl.textContent = `$${dailyPnl.tracked.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+      userDailyPnlEl.textContent = `$${dailyPnl.user.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+
+      trackedDailyPnlEl.className = `stat-value ${dailyPnl.tracked >= 0 ? 'positive' : 'negative'}`;
+      userDailyPnlEl.className = `stat-value ${dailyPnl.user >= 0 ? 'positive' : 'negative'}`;
+
       document.getElementById('snapshot-count').textContent = filteredSnapshots.length.toLocaleString();
+    }
+
+    function calculateDailyPnl() {
+      if (filteredSnapshots.length === 0) {
+        return { tracked: 0, user: 0 };
+      }
+
+      const latest = filteredSnapshots[filteredSnapshots.length - 1];
+      const now = new Date();
+      const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+
+      const firstSnapshotOfDay = filteredSnapshots.find(s => s.timestamp >= startOfDay);
+
+      if (!firstSnapshotOfDay) {
+        return { tracked: 0, user: 0 };
+      }
+
+      const trackedDailyPnl = latest.tracked.accountValue - firstSnapshotOfDay.tracked.accountValue;
+      const userDailyPnl = latest.user.accountValue - firstSnapshotOfDay.user.accountValue;
+
+      return {
+        tracked: trackedDailyPnl,
+        user: userDailyPnl
+      };
     }
 
     function renderBalanceChart() {
