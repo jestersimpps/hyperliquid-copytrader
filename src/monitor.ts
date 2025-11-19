@@ -116,6 +116,7 @@ const monitorTrackedWallet = async (
   const lastTradeTimes = new Map<string, number>();
   const positionMonitor = new PositionMonitorService();
   const snapshotLogger = new SnapshotLoggerService();
+  const config = loadConfig();
   const riskMonitor = new RiskMonitorService(config);
 
   console.log('\n🚀 Copy Trading Bot Started\n');

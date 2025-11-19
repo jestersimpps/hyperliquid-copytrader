@@ -125,16 +125,18 @@ export class HyperliquidService {
 
     return openPositions.map((pos: AssetPosition) => {
       const size = parseFloat(pos.position.szi);
+      const markPrice = parseFloat(pos.position.positionValue) / Math.abs(size);
       return {
         coin: pos.position.coin,
         size: Math.abs(size),
         entryPrice: parseFloat(pos.position.entryPx || '0'),
-        markPrice: parseFloat(pos.position.positionValue) / Math.abs(size),
+        markPrice,
         unrealizedPnl: parseFloat(pos.position.unrealizedPnl),
         leverage: typeof pos.position.leverage.value === 'number' ? pos.position.leverage.value : parseFloat(pos.position.leverage.value),
         marginUsed: parseFloat(pos.position.marginUsed),
         liquidationPrice: parseFloat(pos.position.liquidationPx || '0'),
-        side: size > 0 ? 'long' : 'short'
+        side: size > 0 ? 'long' : 'short',
+        notionalValue: Math.abs(size) * markPrice
       };
     });
   }

@@ -8,4 +8,5 @@ export interface Position {
   marginUsed: number;
   liquidationPrice: number;
   side: 'long' | 'short';
+  notionalValue: number;
 }
