@@ -130,10 +130,11 @@ const monitorTrackedWallet = async (
   const updateBalanceRatio = async (): Promise<void> => {
     if (!userWallet) return;
 
-    const [trackedBalance, userBalance, userPositions] = await Promise.all([
+    const [trackedBalance, userBalance, userPositions, trackedPositions] = await Promise.all([
       service.getAccountBalance(trackedWallet),
       service.getAccountBalance(userWallet),
-      service.getOpenPositions(userWallet)
+      service.getOpenPositions(userWallet),
+      service.getOpenPositions(trackedWallet)
     ]);
 
     const oldRatio = balanceRatio;
@@ -187,6 +188,58 @@ const monitorTrackedWallet = async (
           percentOfAccount,
           lastTradeTime
         );
+      }
+    }
+
+    const trackedCoins = new Set(trackedPositions.map(p => p.coin));
+    const TRADE_COOLDOWN_MS = 2 * 60 * 1000;
+    const now = Date.now();
+
+    for (const position of userPositions) {
+      if (trackedCoins.has(position.coin)) {
+        continue;
+      }
+
+      const lastTradeTime = lastTradeTimes.get(position.coin) || 0;
+      const timeSinceLastTrade = now - lastTradeTime;
+
+      if (timeSinceLastTrade < TRADE_COOLDOWN_MS) {
+        console.log(`⏳ Skipping orphan check for ${position.coin} - recently traded (${Math.round(timeSinceLastTrade / 1000)}s ago)`);
+        continue;
+      }
+
+      if (service.canExecuteTrades()) {
+        try {
+          const notionalValue = position.size * position.markPrice;
+          console.log(`🧹 Auto-closing orphan position: ${position.coin} (${position.side}) - Tracked wallet has no position`);
+          console.log(`   Size: ${position.size.toFixed(4)}, Notional: $${notionalValue.toFixed(2)}, PnL: $${position.unrealizedPnl.toFixed(2)}`);
+
+          await service.closePosition(position.coin, position.markPrice);
+
+          console.log(`✓ Closed orphan position: ${position.coin}\n`);
+
+          lastTradeTimes.set(position.coin, now);
+
+          if (telegramService.isEnabled()) {
+            await telegramService.sendMessage(
+              `🧹 Auto-closed orphan position:\n` +
+              `${position.coin} ${position.side.toUpperCase()}\n` +
+              `Reason: Tracked wallet has no position\n` +
+              `Size: ${position.size.toFixed(4)}\n` +
+              `Notional: $${notionalValue.toFixed(2)}\n` +
+              `PnL: $${position.unrealizedPnl.toFixed(2)}`
+            );
+          }
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          console.error(`✗ Failed to close orphan position ${position.coin}: ${errorMessage}`);
+
+          if (telegramService.isEnabled()) {
+            await telegramService.sendError(
+              `Failed to auto-close orphan position ${position.coin}: ${errorMessage}`
+            );
+          }
+        }
       }
     }
 
