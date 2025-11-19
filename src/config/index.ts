@@ -42,7 +42,7 @@ export const loadConfig = (): Config => {
   const isTestnet = process.env.IS_TESTNET === 'true';
   const telegramBotToken = process.env.TELEGRAM_BOT_TOKEN || null;
   const telegramChatId = process.env.TELEGRAM_CHAT_ID || null;
-  const minOrderValue = process.env.MIN_ORDER_VALUE ? parseFloat(process.env.MIN_ORDER_VALUE) : 10;
+  const minOrderValue = process.env.MIN_ORDER_VALUE ? parseFloat(process.env.MIN_ORDER_VALUE) : 11;
   const alertThresholdPercent = process.env.ALERT_THRESHOLD_PERCENT ? parseFloat(process.env.ALERT_THRESHOLD_PERCENT) : 10;
   const alertCooldownMs = process.env.ALERT_COOLDOWN_MS ? parseInt(process.env.ALERT_COOLDOWN_MS) : 5 * 60 * 1000;
 
