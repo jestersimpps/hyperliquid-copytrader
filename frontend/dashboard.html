@@ -324,9 +324,34 @@
       </div>
     </div>
 
-    <div class="chart-container">
-      <div class="chart-title">Unrealized PNL Tracking</div>
-      <div id="pnl-chart"></div>
+    <div class="charts-row">
+      <div class="chart-container">
+        <div class="chart-title">
+          <span class="wallet-indicator tracked-wallet"></span>Tracked Wallet PNL
+        </div>
+        <div id="tracked-pnl-chart"></div>
+      </div>
+      <div class="chart-container">
+        <div class="chart-title">
+          <span class="wallet-indicator user-wallet"></span>User Wallet PNL
+        </div>
+        <div id="user-pnl-chart"></div>
+      </div>
+    </div>
+
+    <div class="charts-row">
+      <div class="chart-container">
+        <div class="chart-title">
+          <span class="wallet-indicator tracked-wallet"></span>Tracked Position Sizes
+        </div>
+        <div id="tracked-positions-chart"></div>
+      </div>
+      <div class="chart-container">
+        <div class="chart-title">
+          <span class="wallet-indicator user-wallet"></span>User Position Sizes
+        </div>
+        <div id="user-positions-chart"></div>
+      </div>
     </div>
 
     <div class="chart-container">
@@ -475,6 +500,7 @@
       updateStats();
       renderBalanceChart();
       renderPnlChart();
+      renderPositionSizeCharts();
       renderDrawdownChart();
       renderPositionTables();
       renderRiskChart();
@@ -555,24 +581,24 @@
       const trackedPnl = {
         x: dates,
         y: filteredSnapshots.map(s => s.tracked.totalUnrealizedPnl),
-        name: 'Tracked Wallet PNL',
         type: 'scatter',
         mode: 'lines',
-        line: { color: '#667eea', width: 2 },
-        fill: 'tozeroy'
+        line: { color: '#667eea', width: 3 },
+        fill: 'tozeroy',
+        fillcolor: 'rgba(102, 126, 234, 0.3)'
       };
 
       const userPnl = {
         x: dates,
         y: filteredSnapshots.map(s => s.user.totalUnrealizedPnl),
-        name: 'User Wallet PNL',
         type: 'scatter',
         mode: 'lines',
-        line: { color: '#17bf63', width: 2 },
-        fill: 'tozeroy'
+        line: { color: '#17bf63', width: 3 },
+        fill: 'tozeroy',
+        fillcolor: 'rgba(23, 191, 99, 0.3)'
       };
 
-      const layout = {
+      const trackedLayout = {
         ...plotLayout,
         yaxis: {
           ...plotLayout.yaxis,
@@ -582,10 +608,121 @@
           zerolinecolor: '#38444d',
           zerolinewidth: 2
         },
-        legend: { x: 0.01, y: 0.99 }
+        showlegend: false
       };
 
-      Plotly.newPlot('pnl-chart', [trackedPnl, userPnl], layout, plotConfig);
+      const userLayout = {
+        ...plotLayout,
+        yaxis: {
+          ...plotLayout.yaxis,
+          title: 'Unrealized PNL (USD)',
+          tickformat: '$,.2f',
+          zeroline: true,
+          zerolinecolor: '#38444d',
+          zerolinewidth: 2
+        },
+        showlegend: false
+      };
+
+      Plotly.newPlot('tracked-pnl-chart', [trackedPnl], trackedLayout, plotConfig);
+      Plotly.newPlot('user-pnl-chart', [userPnl], userLayout, plotConfig);
+    }
+
+    function renderPositionSizeCharts() {
+      const trackedPositionsByTime = {};
+      const userPositionsByTime = {};
+
+      filteredSnapshots.forEach(snapshot => {
+        const timestamp = new Date(snapshot.timestamp);
+
+        trackedPositionsByTime[timestamp] = {};
+        snapshot.tracked.positions.forEach(pos => {
+          trackedPositionsByTime[timestamp][pos.coin] = pos.notionalValue;
+        });
+
+        userPositionsByTime[timestamp] = {};
+        snapshot.user.positions.forEach(pos => {
+          userPositionsByTime[timestamp][pos.coin] = pos.notionalValue;
+        });
+      });
+
+      const timestamps = Object.keys(trackedPositionsByTime).map(t => new Date(t));
+      const trackedCoins = new Set();
+      const userCoins = new Set();
+
+      Object.values(trackedPositionsByTime).forEach(positions => {
+        Object.keys(positions).forEach(coin => trackedCoins.add(coin));
+      });
+
+      Object.values(userPositionsByTime).forEach(positions => {
+        Object.keys(positions).forEach(coin => userCoins.add(coin));
+      });
+
+      const colorPalette = [
+        '#667eea', '#17bf63', '#e0245e', '#ff6b9d', '#ffad1f', '#1da1f2',
+        '#794bc4', '#f91880', '#00ba7c', '#ffb700', '#8b9dc3', '#c0deed'
+      ];
+
+      const trackedTraces = Array.from(trackedCoins).map((coin, idx) => ({
+        x: timestamps,
+        y: timestamps.map(t => trackedPositionsByTime[t][coin] || null),
+        name: coin,
+        type: 'scatter',
+        mode: 'lines',
+        line: {
+          color: colorPalette[idx % colorPalette.length],
+          width: 2
+        },
+        connectgaps: false
+      }));
+
+      const userTraces = Array.from(userCoins).map((coin, idx) => ({
+        x: timestamps,
+        y: timestamps.map(t => userPositionsByTime[t][coin] || null),
+        name: coin,
+        type: 'scatter',
+        mode: 'lines',
+        line: {
+          color: colorPalette[idx % colorPalette.length],
+          width: 2
+        },
+        connectgaps: false
+      }));
+
+      const trackedLayout = {
+        ...plotLayout,
+        yaxis: {
+          ...plotLayout.yaxis,
+          title: 'Position Size (USD)',
+          tickformat: '$,.0f'
+        },
+        legend: {
+          x: 1.02,
+          y: 1,
+          xanchor: 'left',
+          yanchor: 'top',
+          font: { size: 10 }
+        }
+      };
+
+      const userLayout = {
+        ...plotLayout,
+        yaxis: {
+          ...plotLayout.yaxis,
+          title: 'Position Size (USD)',
+          tickformat: '$,.0f'
+        },
+        legend: {
+          x: 1.02,
+          y: 1,
+          xanchor: 'left',
+          yanchor: 'top',
+          font: { size: 10 }
+        }
+      };
+
+      Plotly.newPlot('tracked-positions-chart', trackedTraces, trackedLayout, plotConfig);
+      Plotly.newPlot('user-positions-chart', userTraces, userLayout, plotConfig);
     }
 
     function renderDrawdownChart() {
