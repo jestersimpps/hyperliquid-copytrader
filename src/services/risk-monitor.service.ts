@@ -115,8 +115,11 @@ export class RiskMonitorService {
   }
 
   checkMarginUsage(balance: Balance): { marginRatio: number; marginUsed: number; accountValue: number } | null {
-    const marginRatio = balance.crossMarginSummary.accountValue > 0
-      ? (balance.crossMaintenanceMarginUsed / balance.crossMarginSummary.accountValue) * 100
+    const accountValue = parseFloat(balance.crossMarginSummary.accountValue);
+    const marginUsed = parseFloat(balance.crossMaintenanceMarginUsed);
+
+    const marginRatio = accountValue > 0
+      ? (marginUsed / accountValue) * 100
       : 0;
 
     if (marginRatio > this.config.marginWarningThreshold) {
@@ -127,8 +130,8 @@ export class RiskMonitorService {
         this.metrics.lastMarginAlert = now;
         return {
           marginRatio,
-          marginUsed: balance.crossMaintenanceMarginUsed,
-          accountValue: balance.crossMarginSummary.accountValue
+          marginUsed,
+          accountValue
         };
       }
     }

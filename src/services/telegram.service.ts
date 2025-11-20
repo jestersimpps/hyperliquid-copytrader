@@ -118,7 +118,7 @@ export class TelegramService {
       const userPnlData = await this.calculatePnlSinceMidnight(userAccountValue, 'user');
 
       const marginRatio = userAccountValue > 0
-        ? (this.stats.userBalance.crossMaintenanceMarginUsed / userAccountValue) * 100
+        ? (parseFloat(this.stats.userBalance.crossMaintenanceMarginUsed) / userAccountValue) * 100
         : 0;
 
       message += '*YOUR ACCOUNT*\n';
