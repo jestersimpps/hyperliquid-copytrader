@@ -417,6 +417,11 @@
       </div>
     </div>
 
+    <div class="chart-container">
+      <div class="chart-title">Realized PNL by Symbol</div>
+      <div id="realized-pnl-chart"></div>
+    </div>
+
     <div class="charts-grid">
       <div class="chart-container">
         <div class="chart-title">Position Sizes</div>
@@ -445,6 +450,7 @@
   <script>
     let allSnapshots = [];
     let filteredSnapshots = [];
+    let allTrades = [];
     let selectedDay = null;
 
     function updateLastUpdatedTime() {
@@ -463,12 +469,18 @@
           lastUpdatedEl.classList.add('updating');
         }
 
-        const response = await fetch('/api/user-snapshots');
-        const data = await response.json();
+        const [snapshotsRes, tradesRes] = await Promise.all([
+          fetch('/api/user-snapshots'),
+          fetch('/api/trades')
+        ]);
 
-        if (!response.ok) throw new Error(data.error || 'Failed to fetch data');
+        const snapshotsData = await snapshotsRes.json();
+        const tradesData = await tradesRes.json();
 
-        allSnapshots = data.snapshots || [];
+        if (!snapshotsRes.ok) throw new Error(snapshotsData.error || 'Failed to fetch snapshots');
+
+        allSnapshots = snapshotsData.snapshots || [];
+        allTrades = tradesData.trades || [];
         applyTimeFilter();
         updateDashboard();
         updateLastUpdatedTime();
@@ -573,6 +585,7 @@
 
       renderPositionSizes();
       renderPositionPnl();
+      renderRealizedPnlChart();
       renderDrawdown();
 
       Plotly.newPlot('risk-metrics-chart', [
@@ -716,6 +729,95 @@
           type: 'line',
           x0: timestamps[0],
           x1: timestamps[timestamps.length - 1],
+          y0: 0,
+          y1: 0,
+          line: { color: '#38444d', width: 1, dash: 'dash' }
+        }]
+      }, { responsive: true });
+    }
+
+    function renderRealizedPnlChart() {
+      let filteredTrades = allTrades;
+
+      if (selectedDay !== null) {
+        const dayStart = new Date(selectedDay);
+        dayStart.setHours(0, 0, 0, 0);
+        const dayEnd = new Date(selectedDay);
+        dayEnd.setHours(23, 59, 59, 999);
+
+        filteredTrades = allTrades.filter(t =>
+          t.timestamp >= dayStart.getTime() && t.timestamp <= dayEnd.getTime()
+        );
+      }
+
+      if (filteredTrades.length === 0) {
+        Plotly.newPlot('realized-pnl-chart', [], {
+          plot_bgcolor: '#0f1419',
+          paper_bgcolor: '#192734',
+          font: { color: '#8899a6' },
+          xaxis: { visible: false },
+          yaxis: { visible: false },
+          annotations: [{
+            text: 'No closed trades',
+            xref: 'paper',
+            yref: 'paper',
+            x: 0.5,
+            y: 0.5,
+            xanchor: 'center',
+            yanchor: 'middle',
+            showarrow: false,
+            font: { size: 16, color: '#657786' }
+          }],
+          margin: { l: 50, r: 20, t: 20, b: 40 }
+        }, { responsive: true });
+        return;
+      }
+
+      const coinData = {};
+
+      filteredTrades
+        .sort((a, b) => a.timestamp - b.timestamp)
+        .forEach(trade => {
+          if (!coinData[trade.coin]) {
+            coinData[trade.coin] = {
+              x: [],
+              y: [],
+              cumulative: 0
+            };
+          }
+
+          coinData[trade.coin].cumulative += trade.realizedPnl;
+          coinData[trade.coin].x.push(new Date(trade.timestamp));
+          coinData[trade.coin].y.push(coinData[trade.coin].cumulative);
+        });
+
+      const traces = Object.entries(coinData).map(([coin, data]) => ({
+        x: data.x,
+        y: data.y,
+        name: coin,
+        type: 'scatter',
+        mode: 'lines+markers',
+        line: { width: 2 },
+        marker: { size: 6 }
+      }));
+
+      Plotly.newPlot('realized-pnl-chart', traces, {
+        plot_bgcolor: '#0f1419',
+        paper_bgcolor: '#192734',
+        font: { color: '#e1e8ed' },
+        xaxis: { gridcolor: '#38444d', showgrid: true },
+        yaxis: {
+          gridcolor: '#38444d',
+          showgrid: true,
+          title: 'Cumulative Realized PNL ($)',
+          tickformat: '.2f'
+        },
+        margin: { l: 50, r: 20, t: 20, b: 40 },
+        legend: { x: 0, y: 1 },
+        shapes: [{
+          type: 'line',
+          x0: filteredTrades[0].timestamp,
+          x1: filteredTrades[filteredTrades.length - 1].timestamp,
           y0: 0,
           y1: 0,
           line: { color: '#38444d', width: 1, dash: 'dash' }

@@ -6,6 +6,7 @@ import { TelegramService } from './services/telegram.service';
 import { PositionMonitorService } from './services/position-monitor.service';
 import { SnapshotLoggerService } from './services/snapshot-logger.service';
 import { RiskMonitorService } from './services/risk-monitor.service';
+import { TradeLoggerService } from './services/trade-logger.service';
 import { calculateBalanceRatio } from './utils/scaling.utils';
 import { loadConfig } from './config';
 
@@ -29,7 +30,8 @@ const processFill = async (
   userWallet: string,
   telegramService: TelegramService,
   startTime: number,
-  lastTradeTimes: Map<string, number>
+  lastTradeTimes: Map<string, number>,
+  tradeLogger: TradeLoggerService
 ): Promise<FillProcessingResult> => {
   try {
     const action = tradeHistoryService.determineAction(fill);
@@ -77,6 +79,31 @@ const processFill = async (
       console.log(`✓ ${action.action.toUpperCase()} ${action.size.toFixed(4)} ${action.coin} in ${executionTime}ms\n`);
     });
 
+    // Log closed trades with realized PNL
+    if (action.action === 'close' || action.action === 'reduce' || action.action === 'reverse') {
+      let orderId = 0;
+      const status = orderResponse?.response?.data?.statuses?.[0];
+      if (status && 'filled' in status) {
+        orderId = status.filled.oid;
+      } else if (status && 'resting' in status) {
+        orderId = status.resting.oid;
+      }
+
+      tradeLogger.logClosedTrade({
+        timestamp: Date.now(),
+        date: new Date().toISOString(),
+        coin: action.coin,
+        side: action.side === 'long' ? 'sell' : 'buy',
+        size: action.size,
+        price: fillPrice,
+        action: action.action as 'close' | 'reduce' | 'reverse',
+        orderId,
+        realizedPnl: parseFloat(fill.closedPnl || '0'),
+        fee: fill.fee || '0',
+        executionMs: executionTime
+      });
+    }
+
     lastTradeTimes.set(action.coin, Date.now());
 
     return { success: true, coin: action.coin, action: action.action };
@@ -116,6 +143,7 @@ const monitorTrackedWallet = async (
   const lastTradeTimes = new Map<string, number>();
   const positionMonitor = new PositionMonitorService();
   const snapshotLogger = new SnapshotLoggerService();
+  const tradeLogger = new TradeLoggerService();
   const config = loadConfig();
   const riskMonitor = new RiskMonitorService(config);
 
@@ -352,7 +380,7 @@ const monitorTrackedWallet = async (
             webSocketFillsService = new WebSocketFillsService(isTestnet);
             try {
               await webSocketFillsService.initialize(trackedWallet, async (fill) => {
-                await processFill(fill, service, tradeHistoryService!, userWallet, telegramService, Date.now(), lastTradeTimes);
+                await processFill(fill, service, tradeHistoryService!, userWallet, telegramService, Date.now(), lastTradeTimes, tradeLogger);
               });
               console.log('✓ Real-time WebSocket monitoring active\n');
 

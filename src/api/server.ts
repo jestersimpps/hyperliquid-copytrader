@@ -106,6 +106,49 @@ app.get('/api/user-snapshots', (req: Request, res: Response) => {
   }
 });
 
+app.get('/api/trades', (req: Request, res: Response) => {
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      return res.json({ trades: [], message: 'No trade data available yet' });
+    }
+
+    const files = fs.readdirSync(DATA_DIR)
+      .filter(file => file.startsWith('trades-') && file.endsWith('.jsonl'))
+      .sort();
+
+    const allTrades: any[] = [];
+
+    files.forEach(file => {
+      const filePath = path.join(DATA_DIR, file);
+      const content = fs.readFileSync(filePath, 'utf-8');
+      const lines = content.trim().split('\n').filter(line => line.length > 0);
+
+      lines.forEach(line => {
+        try {
+          const trade = JSON.parse(line);
+          allTrades.push(trade);
+        } catch (err) {
+          console.error(`Error parsing line in ${file}:`, err);
+        }
+      });
+    });
+
+    allTrades.sort((a, b) => a.timestamp - b.timestamp);
+
+    res.json({
+      trades: allTrades,
+      count: allTrades.length,
+      dateRange: allTrades.length > 0 ? {
+        start: allTrades[0].date,
+        end: allTrades[allTrades.length - 1].date
+      } : null
+    });
+  } catch (error) {
+    console.error('Error reading trades:', error);
+    res.status(500).json({ error: 'Failed to read trade data' });
+  }
+});
+
 app.listen(PORT, HOST, () => {
   console.log(`📊 Dashboard server running on ${HOST}:${PORT}`);
   console.log(`📁 Serving snapshots from: ${DATA_DIR}`);
