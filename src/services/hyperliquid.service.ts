@@ -314,17 +314,39 @@ export class HyperliquidService {
       });
     }
 
-    return await this.walletClient!.order({
-      orders: [{
-        a: coinIndex,
-        b: true,
-        p: priceString,
-        s: validationResult.formattedSize,
-        r: reduceOnly,
-        t: { limit: { tif: reduceOnly ? 'FrontendMarket' : 'Ioc' } }
-      }],
-      grouping: 'na'
-    });
+    try {
+      return await this.walletClient!.order({
+        orders: [{
+          a: coinIndex,
+          b: true,
+          p: priceString,
+          s: validationResult.formattedSize,
+          r: reduceOnly,
+          t: { limit: { tif: reduceOnly ? 'FrontendMarket' : 'Ioc' } }
+        }],
+        grouping: 'na'
+      });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+
+      if (errorMessage.toLowerCase().includes('could not immediately match')) {
+        console.log(`   🔄 IOC failed for ${coin}, retrying with FrontendMarket`);
+
+        return await this.walletClient!.order({
+          orders: [{
+            a: coinIndex,
+            b: true,
+            p: priceString,
+            s: validationResult.formattedSize,
+            r: reduceOnly,
+            t: { limit: { tif: 'FrontendMarket' } }
+          }],
+          grouping: 'na'
+        });
+      }
+
+      throw error;
+    }
   }
 
   async placeMarketSell(coin: string, size: number, fillPrice: number, reduceOnly: boolean = false): Promise<OrderResponse> {
@@ -355,17 +377,39 @@ export class HyperliquidService {
       });
     }
 
-    return await this.walletClient!.order({
-      orders: [{
-        a: coinIndex,
-        b: false,
-        p: priceString,
-        s: validationResult.formattedSize,
-        r: reduceOnly,
-        t: { limit: { tif: reduceOnly ? 'FrontendMarket' : 'Ioc' } }
-      }],
-      grouping: 'na'
-    });
+    try {
+      return await this.walletClient!.order({
+        orders: [{
+          a: coinIndex,
+          b: false,
+          p: priceString,
+          s: validationResult.formattedSize,
+          r: reduceOnly,
+          t: { limit: { tif: reduceOnly ? 'FrontendMarket' : 'Ioc' } }
+        }],
+        grouping: 'na'
+      });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+
+      if (errorMessage.toLowerCase().includes('could not immediately match')) {
+        console.log(`   🔄 IOC failed for ${coin}, retrying with FrontendMarket`);
+
+        return await this.walletClient!.order({
+          orders: [{
+            a: coinIndex,
+            b: false,
+            p: priceString,
+            s: validationResult.formattedSize,
+            r: reduceOnly,
+            t: { limit: { tif: 'FrontendMarket' } }
+          }],
+          grouping: 'na'
+        });
+      }
+
+      throw error;
+    }
   }
 
   async openLong(coin: string, size: number, fillPrice: number): Promise<OrderResponse> {
