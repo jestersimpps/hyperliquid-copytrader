@@ -394,15 +394,9 @@
 
     <div class="controls">
       <div class="control-group">
-        <label>Time Range</label>
-        <select id="time-range">
-          <option value="all">All Time</option>
-          <option value="24h">Last 24 Hours</option>
-          <option value="7d">Last 7 Days</option>
-          <option value="30d">Last 30 Days</option>
-        </select>
+        <label>Viewing Data For:</label>
+        <span id="selected-date-display" style="font-weight: bold; font-size: 1.1em;">Today</span>
       </div>
-      <button id="refresh-btn">Refresh Data</button>
     </div>
 
     <div class="charts-grid">
@@ -448,10 +442,10 @@
   </div>
 
   <script>
-    let allSnapshots = [];
     let filteredSnapshots = [];
     let allTrades = [];
-    let selectedDay = null;
+    let selectedDate = new Date().toISOString().split('T')[0];
+    let dailySummaryData = [];
 
     function updateLastUpdatedTime() {
       const now = new Date();
@@ -461,7 +455,7 @@
       lastUpdatedEl.classList.remove('updating');
     }
 
-    async function fetchData(isAutoRefresh = false) {
+    async function fetchData(isAutoRefresh = false, date = null) {
       try {
         if (isAutoRefresh) {
           const lastUpdatedEl = document.getElementById('last-updated');
@@ -469,19 +463,23 @@
           lastUpdatedEl.classList.add('updating');
         }
 
-        const [snapshotsRes, tradesRes] = await Promise.all([
-          fetch('/api/user-snapshots'),
-          fetch('/api/trades')
+        const targetDate = date || selectedDate;
+        const [snapshotsRes, tradesRes, summaryRes] = await Promise.all([
+          fetch(`/api/user-snapshots?date=${targetDate}`),
+          fetch(`/api/trades?date=${targetDate}`),
+          fetch('/api/daily-summary?days=7')
         ]);
 
         const snapshotsData = await snapshotsRes.json();
         const tradesData = await tradesRes.json();
+        const summaryData = await summaryRes.json();
 
         if (!snapshotsRes.ok) throw new Error(snapshotsData.error || 'Failed to fetch snapshots');
 
-        allSnapshots = snapshotsData.snapshots || [];
+        filteredSnapshots = snapshotsData.snapshots || [];
         allTrades = tradesData.trades || [];
-        applyTimeFilter();
+        dailySummaryData = summaryData.days || [];
+
         updateDashboard();
         updateLastUpdatedTime();
 
@@ -495,36 +493,26 @@
       }
     }
 
-    function applyTimeFilter() {
-      if (selectedDay !== null) {
-        return;
-      }
-
-      const timeRange = document.getElementById('time-range').value;
-      const now = Date.now();
-
-      if (timeRange === 'all') {
-        filteredSnapshots = [...allSnapshots];
-      } else {
-        let cutoffTime;
-        if (timeRange === '24h') cutoffTime = now - 24 * 60 * 60 * 1000;
-        else if (timeRange === '7d') cutoffTime = now - 7 * 24 * 60 * 60 * 1000;
-        else if (timeRange === '30d') cutoffTime = now - 30 * 24 * 60 * 60 * 1000;
-
-        filteredSnapshots = allSnapshots.filter(s => s.timestamp >= cutoffTime);
-      }
+    async function filterByDay(dateStr) {
+      selectedDate = dateStr;
+      updateSelectedDateDisplay(dateStr);
+      await fetchData(false, dateStr);
     }
 
-    function filterByDay(day) {
-      if (selectedDay && selectedDay.getTime() === day.date.getTime()) {
-        selectedDay = null;
-        applyTimeFilter();
-      } else {
-        selectedDay = day.date;
-        filteredSnapshots = [...day.snapshots];
-      }
+    function updateSelectedDateDisplay(dateStr) {
+      const displayEl = document.getElementById('selected-date-display');
+      const today = new Date().toISOString().split('T')[0];
 
-      updateDashboard();
+      if (dateStr === today) {
+        displayEl.textContent = 'Today';
+      } else {
+        const date = new Date(dateStr);
+        displayEl.textContent = date.toLocaleDateString('en-US', {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric'
+        });
+      }
     }
 
     function updateDashboard() {
@@ -545,7 +533,7 @@
       document.getElementById('margin-used').textContent = `$${parseFloat(latest.totalMarginUsed || 0).toFixed(2)}`;
       document.getElementById('avg-leverage').textContent = `${parseFloat(latest.averageLeverage || 0).toFixed(2)}x`;
 
-      renderDailyCards(allSnapshots);
+      renderDailyCards();
       renderCharts();
     }
 
@@ -825,141 +813,47 @@
       }, { responsive: true });
     }
 
-    function groupSnapshotsByDay(snapshots, numDays = 7) {
-      const dailyData = [];
-      const today = new Date();
-
-      for (let i = 0; i < numDays; i++) {
-        const dayStart = new Date(today);
-        dayStart.setDate(today.getDate() - i);
-        dayStart.setHours(0, 0, 0, 0);
-
-        const dayEnd = new Date(dayStart);
-        dayEnd.setHours(23, 59, 59, 999);
-
-        const daySnapshots = snapshots.filter(s =>
-          s.timestamp >= dayStart.getTime() && s.timestamp <= dayEnd.getTime()
-        );
-
-        if (daySnapshots.length > 0) {
-          const firstSnapshot = daySnapshots[0];
-          const lastSnapshot = daySnapshots[daySnapshots.length - 1];
-
-          const startBalance = parseFloat(firstSnapshot.wallet.accountValue);
-          const endBalance = parseFloat(lastSnapshot.wallet.accountValue);
-          const pnlUsd = endBalance - startBalance;
-          const pnlPercent = startBalance > 0 ? (pnlUsd / startBalance) * 100 : 0;
-
-          dailyData.push({
-            date: dayStart,
-            dateLabel: dayStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-            startBalance,
-            endBalance,
-            pnlUsd,
-            pnlPercent,
-            snapshots: daySnapshots,
-            hasData: true
-          });
-        } else {
-          dailyData.push({
-            date: dayStart,
-            dateLabel: dayStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-            hasData: false
-          });
-        }
-      }
-
-      return dailyData.reverse(); // oldest to newest
-    }
-
-    function renderDailyCards(snapshots) {
-      const dailyData = groupSnapshotsByDay(snapshots, 7);
+    function renderDailyCards() {
       const container = document.getElementById('daily-cards-grid');
       container.innerHTML = '';
 
-      dailyData.forEach((day, index) => {
+      dailySummaryData.forEach((day, index) => {
         const card = document.createElement('div');
         card.className = day.hasData ? 'daily-card' : 'daily-card no-data';
 
-        const isSelected = selectedDay && day.hasData && selectedDay.getTime() === day.date.getTime();
+        const isSelected = day.date === selectedDate;
         if (isSelected) {
           card.classList.add('selected');
         }
 
+        const date = new Date(day.date);
+        const dateLabel = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
         if (day.hasData) {
-          const pnlClass = day.pnlUsd >= 0 ? 'positive' : 'negative';
-          const pnlSign = day.pnlUsd >= 0 ? '+' : '';
+          const pnlClass = day.totalPnl >= 0 ? 'positive' : 'negative';
+          const pnlSign = day.totalPnl >= 0 ? '+' : '';
 
           card.innerHTML = `
-            <div class="daily-card-date">${day.dateLabel}</div>
+            <div class="daily-card-date">${dateLabel}</div>
             <div class="daily-card-pnl ${pnlClass}">
-              ${pnlSign}$${day.pnlUsd.toFixed(2)}
+              ${pnlSign}$${day.totalPnl.toFixed(2)}
             </div>
             <div class="daily-card-percent">
-              ${pnlSign}${day.pnlPercent.toFixed(2)}%
+              ${pnlSign}${day.pnlPercentage.toFixed(2)}%
             </div>
-            <div class="daily-card-chart" id="daily-chart-${index}"></div>
           `;
 
-          card.addEventListener('click', () => filterByDay(day));
-
+          card.addEventListener('click', () => filterByDay(day.date));
           container.appendChild(card);
-
-          // Render mini chart
-          setTimeout(() => {
-            const timestamps = day.snapshots.map(s => new Date(s.timestamp));
-            const balances = day.snapshots.map(s => parseFloat(s.wallet.accountValue));
-
-            const miniChartLayout = {
-              plot_bgcolor: '#0f1419',
-              paper_bgcolor: 'transparent',
-              xaxis: { visible: false, showgrid: false },
-              yaxis: { visible: false, showgrid: false },
-              margin: { l: 0, r: 0, t: 0, b: 0 },
-              showlegend: false,
-              hovermode: false
-            };
-
-            const miniChartConfig = {
-              responsive: true,
-              displayModeBar: false,
-              staticPlot: true
-            };
-
-            Plotly.newPlot(`daily-chart-${index}`, [{
-              x: timestamps,
-              y: balances,
-              type: 'scatter',
-              mode: 'lines',
-              line: {
-                color: day.pnlUsd >= 0 ? '#17bf63' : '#e0245e',
-                width: 1.5
-              },
-              fill: 'tozeroy',
-              fillcolor: day.pnlUsd >= 0 ? 'rgba(23, 191, 99, 0.2)' : 'rgba(224, 36, 94, 0.2)'
-            }], miniChartLayout, miniChartConfig);
-          }, 0);
         } else {
           card.innerHTML = `
-            <div class="daily-card-date">${day.dateLabel}</div>
+            <div class="daily-card-date">${dateLabel}</div>
             <div class="no-data-text">No Data</div>
           `;
           container.appendChild(card);
         }
       });
     }
-
-    document.getElementById('time-range').addEventListener('change', () => {
-      applyTimeFilter();
-      updateDashboard();
-    });
-
-    document.getElementById('refresh-btn').addEventListener('click', () => {
-      document.getElementById('refresh-btn').disabled = true;
-      fetchData().finally(() => {
-        document.getElementById('refresh-btn').disabled = false;
-      });
-    });
 
     fetchData();
 
