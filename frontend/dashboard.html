@@ -125,6 +125,11 @@
       min-width: 300px;
     }
 
+    .chart-container canvas {
+      min-height: 300px;
+      max-height: 400px;
+    }
+
     .chart-title {
       font-size: clamp(1rem, 3vw, 1.3rem);
       margin-bottom: 15px;
@@ -482,41 +487,41 @@
     <div class="charts-grid">
       <div class="chart-container">
         <div class="chart-title">Account Balance</div>
-        <div id="balance-chart"></div>
+        <canvas id="balance-chart"></canvas>
       </div>
 
       <div class="chart-container">
         <div class="chart-title">Unrealized PNL</div>
-        <div id="pnl-chart"></div>
+        <canvas id="pnl-chart"></canvas>
       </div>
     </div>
 
     <div class="chart-container">
       <div class="chart-title">Realized PNL by Symbol</div>
-      <div id="realized-pnl-chart"></div>
+      <canvas id="realized-pnl-chart"></canvas>
     </div>
 
     <div class="charts-grid">
       <div class="chart-container">
         <div class="chart-title">Position Sizes</div>
-        <div id="position-sizes-chart"></div>
+        <canvas id="position-sizes-chart"></canvas>
       </div>
 
       <div class="chart-container">
         <div class="chart-title">Position PNL Over Time</div>
-        <div id="position-pnl-chart"></div>
+        <canvas id="position-pnl-chart"></canvas>
       </div>
     </div>
 
     <div class="charts-grid">
       <div class="chart-container">
         <div class="chart-title">Drawdown Analysis</div>
-        <div id="drawdown-chart"></div>
+        <canvas id="drawdown-chart"></canvas>
       </div>
 
       <div class="chart-container">
         <div class="chart-title">Risk Metrics</div>
-        <div id="risk-metrics-chart"></div>
+        <canvas id="risk-metrics-chart"></canvas>
       </div>
     </div>
   </div>
@@ -621,6 +626,62 @@
       }
     }
 
+    // Store chart instances for updates
+    let chartInstances = {};
+
+    // Chart.js dark theme configuration
+    function getChartConfig(type = 'line', options = {}) {
+      return {
+        type,
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: {
+            mode: 'index',
+            intersect: false
+          },
+          plugins: {
+            legend: {
+              labels: {
+                color: '#e1e8ed',
+                font: { size: 12 }
+              },
+              ...options.legend
+            },
+            tooltip: {
+              backgroundColor: '#192734',
+              titleColor: '#e1e8ed',
+              bodyColor: '#8899a6',
+              borderColor: '#38444d',
+              borderWidth: 1
+            }
+          },
+          scales: {
+            x: {
+              ticks: { color: '#8899a6', font: { size: 11 } },
+              grid: { color: '#38444d', display: true },
+              type: 'time',
+              time: { tooltipFormat: 'MMM d, HH:mm' }
+            },
+            y: {
+              ticks: { color: '#8899a6', font: { size: 11 } },
+              grid: { color: '#38444d', display: true },
+              ...options.yScale
+            },
+            ...(options.y2Scale && {
+              y2: {
+                position: 'right',
+                ticks: { color: '#8899a6', font: { size: 11 } },
+                grid: { display: false },
+                ...options.y2Scale
+              }
+            })
+          },
+          ...options.extra
+        }
+      };
+    }
+
     function updateDashboard() {
       if (filteredSnapshots.length === 0) return;
 
@@ -650,62 +711,81 @@
       const margins = filteredSnapshots.map(s => parseFloat(s.wallet.totalMarginUsed || 0));
       const leverages = filteredSnapshots.map(s => parseFloat(s.wallet.averageLeverage || 0));
 
-      const commonLayout = {
-        plot_bgcolor: '#0f1419',
-        paper_bgcolor: '#192734',
-        font: { color: '#e1e8ed' },
-        xaxis: { gridcolor: '#38444d', showgrid: true },
-        yaxis: { gridcolor: '#38444d', showgrid: true },
-        margin: { l: 50, r: 20, t: 20, b: 40 }
-      };
+      // Balance Chart
+      if (chartInstances['balance-chart']) chartInstances['balance-chart'].destroy();
+      const balanceCtx = document.getElementById('balance-chart').getContext('2d');
+      chartInstances['balance-chart'] = new Chart(balanceCtx, {
+        ...getChartConfig('line'),
+        data: {
+          labels: timestamps,
+          datasets: [{
+            label: 'Account Balance',
+            data: balances,
+            borderColor: '#17bf63',
+            backgroundColor: 'rgba(23, 191, 99, 0.1)',
+            fill: true,
+            borderWidth: 2,
+            tension: 0.1
+          }]
+        }
+      });
 
-      Plotly.newPlot('balance-chart', [{
-        x: timestamps,
-        y: balances,
-        type: 'scatter',
-        mode: 'lines',
-        fill: 'tozeroy',
-        line: { color: '#17bf63', width: 2 }
-      }], commonLayout, { responsive: true });
-
-      Plotly.newPlot('pnl-chart', [{
-        x: timestamps,
-        y: pnls,
-        type: 'scatter',
-        mode: 'lines',
-        fill: 'tozeroy',
-        line: { color: '#667eea', width: 2 }
-      }], commonLayout, { responsive: true });
+      // PNL Chart
+      if (chartInstances['pnl-chart']) chartInstances['pnl-chart'].destroy();
+      const pnlCtx = document.getElementById('pnl-chart').getContext('2d');
+      chartInstances['pnl-chart'] = new Chart(pnlCtx, {
+        ...getChartConfig('line'),
+        data: {
+          labels: timestamps,
+          datasets: [{
+            label: 'Unrealized PNL',
+            data: pnls,
+            borderColor: '#667eea',
+            backgroundColor: 'rgba(102, 126, 234, 0.1)',
+            fill: true,
+            borderWidth: 2,
+            tension: 0.1
+          }]
+        }
+      });
 
       renderPositionSizes();
       renderPositionPnl();
       renderRealizedPnlChart();
       renderDrawdown();
 
-      Plotly.newPlot('risk-metrics-chart', [
-        {
-          x: timestamps,
-          y: margins,
-          name: 'Margin Used',
-          type: 'scatter',
-          mode: 'lines',
-          line: { color: '#e0245e', width: 2 }
-        },
-        {
-          x: timestamps,
-          y: leverages,
-          name: 'Avg Leverage',
-          type: 'scatter',
-          mode: 'lines',
-          yaxis: 'y2',
-          line: { color: '#ffad1f', width: 2 }
+      // Risk Metrics Chart (Dual Y-axis)
+      if (chartInstances['risk-metrics-chart']) chartInstances['risk-metrics-chart'].destroy();
+      const riskCtx = document.getElementById('risk-metrics-chart').getContext('2d');
+      chartInstances['risk-metrics-chart'] = new Chart(riskCtx, {
+        ...getChartConfig('line', {
+          legend: { position: 'top', align: 'start' },
+          y2Scale: { title: { display: true, text: 'Leverage', color: '#8899a6' } }
+        }),
+        data: {
+          labels: timestamps,
+          datasets: [
+            {
+              label: 'Margin Used',
+              data: margins,
+              borderColor: '#e0245e',
+              backgroundColor: 'rgba(224, 36, 94, 0.1)',
+              borderWidth: 2,
+              yAxisID: 'y',
+              tension: 0.1
+            },
+            {
+              label: 'Avg Leverage',
+              data: leverages,
+              borderColor: '#ffad1f',
+              backgroundColor: 'rgba(255, 173, 31, 0.1)',
+              borderWidth: 2,
+              yAxisID: 'y2',
+              tension: 0.1
+            }
+          ]
         }
-      ], {
-        ...commonLayout,
-        yaxis: { title: 'Margin ($)', gridcolor: '#38444d' },
-        yaxis2: { title: 'Leverage', overlaying: 'y', side: 'right', gridcolor: '#38444d' },
-        legend: { x: 0, y: 1 }
-      }, { responsive: true });
+      });
     }
 
     function renderPositionSizes() {
