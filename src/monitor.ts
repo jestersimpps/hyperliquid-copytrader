@@ -450,37 +450,54 @@ const monitorTrackedWallet = async (
 
   const intervalId = setInterval(poll, pollInterval);
 
-  // Heartbeat check: Force reconnect if no fills for 5 minutes
-  const heartbeatCheckInterval = 5 * 60 * 1000; // Check every 5 minutes
-  const staleThreshold = 5 * 60 * 1000; // 5 minutes without fills
-  const heartbeatId = setInterval(async () => {
+  // Heartbeat check 1: Force reconnect if no fills for 1 minute
+  const reconnectCheckInterval = 30 * 1000; // Check every 30 seconds
+  const reconnectThreshold = 1 * 60 * 1000; // 1 minute without fills
+  const reconnectCheckId = setInterval(async () => {
     if (!webSocketFillsService || !userWallet) return;
 
     const now = Date.now();
     const timeSinceLastFill = now - lastFillReceivedTime;
 
-    if (timeSinceLastFill > staleThreshold) {
-      console.warn(`⚠️  No fills received for ${Math.floor(timeSinceLastFill / 60000)} minutes - reconnecting WebSocket`);
+    if (timeSinceLastFill > reconnectThreshold) {
+      console.warn(`⚠️  No fills received for ${Math.floor(timeSinceLastFill / 1000)} seconds - reconnecting WebSocket`);
 
       try {
         await webSocketFillsService.forceReconnect();
-        lastFillReceivedTime = Date.now(); // Reset timer after reconnect
+        lastFillReceivedTime = Date.now();
         console.log(`✓ WebSocket force reconnected due to inactivity`);
-
-        if (telegramService.isEnabled()) {
-          await telegramService.sendMessage(`⚠️ WebSocket reconnected after ${Math.floor(timeSinceLastFill / 60000)} min of inactivity`);
-        }
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
-        console.error(`✗ Heartbeat reconnection failed: ${errorMessage}`);
+        console.error(`✗ Reconnection failed: ${errorMessage}`);
       }
     }
-  }, heartbeatCheckInterval);
+  }, reconnectCheckInterval);
+
+  // Heartbeat check 2: Warning if no fills for 5 minutes
+  const warningCheckInterval = 5 * 60 * 1000; // Check every 5 minutes
+  const warningThreshold = 5 * 60 * 1000; // 5 minutes without fills
+  let lastWarningTime = 0;
+  const warningCheckId = setInterval(async () => {
+    if (!webSocketFillsService || !userWallet) return;
+
+    const now = Date.now();
+    const timeSinceLastFill = now - lastFillReceivedTime;
+
+    if (timeSinceLastFill > warningThreshold && (now - lastWarningTime) > warningThreshold) {
+      console.warn(`⚠️  No fills received for ${Math.floor(timeSinceLastFill / 60000)} minutes`);
+
+      if (telegramService.isEnabled()) {
+        await telegramService.sendMessage(`⚠️ No fills for ${Math.floor(timeSinceLastFill / 60000)} min - may indicate low trading activity`);
+      }
+      lastWarningTime = now;
+    }
+  }, warningCheckInterval);
 
   process.on('SIGINT', async () => {
     console.log('\n\n🛑 Monitoring stopped by user');
     clearInterval(intervalId);
-    clearInterval(heartbeatId);
+    clearInterval(reconnectCheckId);
+    clearInterval(warningCheckId);
     if (webSocketFillsService) {
       await webSocketFillsService.close();
     }
