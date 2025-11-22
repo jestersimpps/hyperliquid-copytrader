@@ -401,8 +401,8 @@ const monitorTrackedWallet = async (
 
             webSocketFillsService = new WebSocketFillsService(isTestnet);
             try {
-              await webSocketFillsService.initialize(trackedWallet, async (fill) => {
-                await processFill(
+              await webSocketFillsService.initialize(trackedWallet, (fill) => {
+                processFill(
                   fill,
                   service,
                   tradeHistoryService!,
@@ -413,7 +413,10 @@ const monitorTrackedWallet = async (
                   tradeLogger,
                   balanceRatio,
                   () => { lastFillReceivedTime = Date.now(); }
-                );
+                ).catch((error) => {
+                  const errorMessage = error instanceof Error ? error.message : String(error);
+                  console.error(`✗ Fatal error processing fill: ${errorMessage}`);
+                });
               });
               console.log('✓ Real-time WebSocket monitoring active\n');
 

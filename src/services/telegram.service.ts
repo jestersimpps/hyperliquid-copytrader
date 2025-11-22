@@ -43,7 +43,20 @@ export class TelegramService {
       this.enabled = true;
       this.loadState();
       this.setupCommands();
+      this.setupErrorHandlers();
     }
+  }
+
+  private setupErrorHandlers(): void {
+    if (!this.bot) return;
+
+    this.bot.on('polling_error', (error) => {
+      console.error('Telegram polling error:', error.message);
+    });
+
+    this.bot.on('error', (error) => {
+      console.error('Telegram bot error:', error.message);
+    });
   }
 
   private setupCommands(): void {

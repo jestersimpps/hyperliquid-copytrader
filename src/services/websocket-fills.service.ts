@@ -66,38 +66,48 @@ export class WebSocketFillsService {
   }
 
   private handleFills(data: WsUserFills): void {
-    this.lastFillReceivedAt = Date.now();
+    try {
+      this.lastFillReceivedAt = Date.now();
 
-    if (data.isSnapshot) {
-      if (this.isFirstSnapshot) {
-        console.log(`[WebSocket] Received initial snapshot with ${data.fills.length} historical fills`);
-        data.fills.forEach(fill => {
-          if (fill.tid) {
-            this.processedTids.add(String(fill.tid));
+      if (data.isSnapshot) {
+        if (this.isFirstSnapshot) {
+          console.log(`[WebSocket] Received initial snapshot with ${data.fills.length} historical fills`);
+          data.fills.forEach(fill => {
+            if (fill.tid) {
+              this.processedTids.add(String(fill.tid));
+            }
+          });
+          this.isFirstSnapshot = false;
+        }
+        return;
+      }
+
+      for (const fill of data.fills) {
+        const tid = String(fill.tid);
+
+        if (this.processedTids.has(tid)) {
+          continue;
+        }
+
+        this.processedTids.add(tid);
+
+        if (this.processedTids.size > 1000) {
+          const tidsArray = Array.from(this.processedTids);
+          this.processedTids = new Set(tidsArray.slice(-500));
+        }
+
+        if (this.onFillCallback) {
+          try {
+            this.onFillCallback(fill);
+          } catch (callbackError) {
+            const errorMessage = callbackError instanceof Error ? callbackError.message : String(callbackError);
+            console.error(`✗ Error in fill callback for ${fill.coin}: ${errorMessage}`);
           }
-        });
-        this.isFirstSnapshot = false;
+        }
       }
-      return;
-    }
-
-    for (const fill of data.fills) {
-      const tid = String(fill.tid);
-
-      if (this.processedTids.has(tid)) {
-        continue;
-      }
-
-      this.processedTids.add(tid);
-
-      if (this.processedTids.size > 1000) {
-        const tidsArray = Array.from(this.processedTids);
-        this.processedTids = new Set(tidsArray.slice(-500));
-      }
-
-      if (this.onFillCallback) {
-        this.onFillCallback(fill);
-      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error(`✗ Error handling WebSocket fills: ${errorMessage}`);
     }
   }
 
@@ -123,7 +133,6 @@ export class WebSocketFillsService {
 
     this.isReconnecting = true;
 
-    // Save callback before close() clears it
     const savedWallet = this.trackedWallet;
     const savedCallback = this.onFillCallback;
 
@@ -134,6 +143,8 @@ export class WebSocketFillsService {
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       console.error(`✗ Reconnection attempt ${this.reconnectAttempts} failed: ${errorMessage}`);
+      this.onFillCallback = savedCallback;
+      this.trackedWallet = savedWallet;
     }
   }
 
