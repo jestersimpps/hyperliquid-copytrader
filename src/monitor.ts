@@ -139,7 +139,21 @@ const monitorTrackedWallet = async (
   telegramService: TelegramService
 ): Promise<void> => {
   const service = new HyperliquidService(privateKey, userWallet, isTestnet, telegramService);
-  await service.initialize();
+
+  try {
+    await service.initialize();
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error(`\n❌ CRITICAL: Service initialization failed after all retries`);
+    console.error(`Error: ${errorMessage}`);
+    console.error(`\nThe application will exit. PM2 will restart it automatically.\n`);
+
+    if (telegramService.isEnabled()) {
+      await telegramService.sendError(`Service initialization failed: ${errorMessage}. App will restart.`).catch(() => {});
+    }
+
+    process.exit(1);
+  }
 
   const startTime = Date.now();
   let balanceRatio = 1;

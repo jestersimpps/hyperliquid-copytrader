@@ -75,11 +75,32 @@ export class HyperliquidService {
       return;
     }
 
-    await this.metaCache.initialize();
+    const MAX_INIT_RETRIES = 3;
+    const INIT_RETRY_DELAY_MS = 10000;
+    let lastError: Error | null = null;
 
-    this.loadTickSizeCache();
+    for (let attempt = 1; attempt <= MAX_INIT_RETRIES; attempt++) {
+      try {
+        await this.metaCache.initialize();
+        this.loadTickSizeCache();
+        this.initialized = true;
+        return;
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error));
+        const errorMessage = lastError.message;
 
-    this.initialized = true;
+        if (attempt < MAX_INIT_RETRIES) {
+          console.error(`\n❌ Initialization failed (attempt ${attempt}/${MAX_INIT_RETRIES}): ${errorMessage}`);
+          console.log(`   Retrying in ${INIT_RETRY_DELAY_MS / 1000}s...\n`);
+          await new Promise(resolve => setTimeout(resolve, INIT_RETRY_DELAY_MS));
+          continue;
+        }
+
+        throw lastError;
+      }
+    }
+
+    throw lastError || new Error('Service initialization failed after all retries');
   }
 
   private loadTickSizeCache(): void {
