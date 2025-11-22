@@ -243,6 +243,52 @@ app.get('/api/daily-summary', (req: Request, res: Response) => {
   }
 });
 
+app.get('/api/recent-orders', (req: Request, res: Response) => {
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      return res.json({ orders: [], message: 'No trade data available yet' });
+    }
+
+    const today = new Date().toISOString().split('T')[0];
+    const fileName = `trades-${today}.jsonl`;
+    const filePath = path.join(DATA_DIR, fileName);
+
+    if (!fs.existsSync(filePath)) {
+      return res.json({
+        orders: [],
+        count: 0,
+        message: 'No trades today'
+      });
+    }
+
+    const content = fs.readFileSync(filePath, 'utf-8');
+    const lines = content.trim().split('\n').filter(line => line.length > 0);
+    const allTrades: any[] = [];
+
+    lines.forEach(line => {
+      try {
+        const trade = JSON.parse(line);
+        allTrades.push(trade);
+      } catch (err) {
+        console.error(`Error parsing line in ${fileName}:`, err);
+      }
+    });
+
+    const oneMinuteAgo = Date.now() - (60 * 1000);
+    const recentOrders = allTrades
+      .filter(trade => trade.timestamp >= oneMinuteAgo)
+      .sort((a, b) => b.timestamp - a.timestamp);
+
+    res.json({
+      orders: recentOrders,
+      count: recentOrders.length
+    });
+  } catch (error) {
+    console.error('Error reading recent orders:', error);
+    res.status(500).json({ error: 'Failed to read recent orders' });
+  }
+});
+
 app.listen(PORT, HOST, () => {
   console.log(`📊 Dashboard server running on ${HOST}:${PORT}`);
   console.log(`📁 Serving snapshots from: ${DATA_DIR}`);

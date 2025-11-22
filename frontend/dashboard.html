@@ -384,6 +384,91 @@
       transform: none;
     }
 
+    .recent-orders-container {
+      background: rgba(255, 255, 255, 0.05);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 16px;
+      padding: 20px;
+      margin-bottom: 20px;
+      box-shadow:
+        0 8px 32px rgba(0, 0, 0, 0.3),
+        inset 0 1px 0 rgba(255, 255, 255, 0.1);
+      transition: all 0.3s ease;
+    }
+
+    .recent-orders-container:hover {
+      border-color: rgba(0, 212, 255, 0.3);
+      box-shadow:
+        0 12px 40px rgba(0, 0, 0, 0.4),
+        0 0 20px rgba(0, 212, 255, 0.1),
+        inset 0 1px 0 rgba(255, 255, 255, 0.15);
+    }
+
+    .recent-orders-title {
+      font-size: 1.3em;
+      margin-bottom: 15px;
+      color: #e1e8ed;
+    }
+
+    .orders-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9em;
+    }
+
+    .orders-table thead {
+      background: rgba(255, 255, 255, 0.03);
+    }
+
+    .orders-table th {
+      padding: 12px 10px;
+      text-align: left;
+      font-weight: 600;
+      color: #8899a6;
+      text-transform: uppercase;
+      font-size: 0.75em;
+      letter-spacing: 0.5px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .orders-table td {
+      padding: 10px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      color: #e1e8ed;
+    }
+
+    .orders-table tbody tr {
+      transition: all 0.2s ease;
+    }
+
+    .orders-table tbody tr:hover {
+      background: rgba(0, 212, 255, 0.05);
+    }
+
+    .order-side-buy {
+      color: #17bf63;
+      font-weight: bold;
+    }
+
+    .order-side-sell {
+      color: #e0245e;
+      font-weight: bold;
+    }
+
+    .order-time {
+      color: #8899a6;
+      font-size: 0.9em;
+    }
+
+    .no-orders-text {
+      text-align: center;
+      color: #657786;
+      padding: 20px;
+      font-style: italic;
+    }
+
     /* Small phones - portrait */
     @media (max-width: 480px) {
       body {
@@ -563,9 +648,28 @@
         <div class="stat-label">Margin Usage</div>
         <div class="stat-value" id="margin-used">$0</div>
       </div>
-      <div class="stat-card">
-        <div class="stat-label">Avg Leverage</div>
-        <div class="stat-value" id="avg-leverage">0x</div>
+    </div>
+
+    <div class="recent-orders-container">
+      <div class="recent-orders-title">Recent Orders (Last Minute)</div>
+      <div id="orders-table-container">
+        <table class="orders-table">
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>Coin</th>
+              <th>Side</th>
+              <th>Size</th>
+              <th>Price</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="orders-table-body">
+            <tr>
+              <td colspan="6" class="no-orders-text">Loading orders...</td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </div>
 
@@ -623,6 +727,7 @@
     let allTrades = [];
     let selectedDate = new Date().toISOString().split('T')[0];
     let dailySummaryData = [];
+    let recentOrders = [];
 
     // Consistent color palette for symbols across all charts
     const SYMBOL_COLORS = [
@@ -667,23 +772,27 @@
         }
 
         const targetDate = date || selectedDate;
-        const [snapshotsRes, tradesRes, summaryRes] = await Promise.all([
+        const [snapshotsRes, tradesRes, summaryRes, ordersRes] = await Promise.all([
           fetch(`/api/user-snapshots?date=${targetDate}`),
           fetch(`/api/trades?date=${targetDate}`),
-          fetch('/api/daily-summary?days=10')
+          fetch('/api/daily-summary?days=10'),
+          fetch('/api/recent-orders')
         ]);
 
         const snapshotsData = await snapshotsRes.json();
         const tradesData = await tradesRes.json();
         const summaryData = await summaryRes.json();
+        const ordersData = await ordersRes.json();
 
         if (!snapshotsRes.ok) throw new Error(snapshotsData.error || 'Failed to fetch snapshots');
 
         filteredSnapshots = snapshotsData.snapshots || [];
         allTrades = tradesData.trades || [];
         dailySummaryData = summaryData.days || [];
+        recentOrders = ordersData.orders || [];
 
         updateDashboard();
+        renderRecentOrders();
         updateLastUpdatedTime();
 
         document.getElementById('loading').style.display = 'none';
@@ -794,7 +903,6 @@
 
       document.getElementById('position-count').textContent = latest.positionCount || 0;
       document.getElementById('margin-used').textContent = `$${parseFloat(latest.totalMarginUsed || 0).toFixed(2)}`;
-      document.getElementById('avg-leverage').textContent = `${parseFloat(latest.averageLeverage || 0).toFixed(2)}x`;
 
       renderDailyCards();
       renderCharts();
@@ -1191,6 +1299,33 @@
       } catch (error) {
         console.error(`Failed to render mini chart for ${date}:`, error);
       }
+    }
+
+    function renderRecentOrders() {
+      const tbody = document.getElementById('orders-table-body');
+
+      if (recentOrders.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="no-orders-text">No orders in the last minute</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = recentOrders.map(order => {
+        const time = new Date(order.timestamp);
+        const timeStr = time.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        const sideClass = order.side === 'buy' ? 'order-side-buy' : 'order-side-sell';
+        const sideText = order.side.toUpperCase();
+
+        return `
+          <tr>
+            <td class="order-time">${timeStr}</td>
+            <td><strong>${order.coin}</strong></td>
+            <td class="${sideClass}">${sideText}</td>
+            <td>${order.size.toFixed(4)}</td>
+            <td>$${order.price.toFixed(4)}</td>
+            <td>${order.action || 'N/A'}</td>
+          </tr>
+        `;
+      }).join('');
     }
 
     fetchData();
