@@ -44,6 +44,7 @@ export class HyperliquidService {
 
     const httpTransport = new HttpTransport({
       url: httpUrl,
+      timeout: 30000,
       fetchOptions: {
         keepalive: false
       }
@@ -101,6 +102,31 @@ export class HyperliquidService {
     }
 
     throw lastError || new Error('Service initialization failed after all retries');
+  }
+
+  async preCacheTickSizes(coins: string[]): Promise<void> {
+    console.log(`Pre-caching tick sizes for ${coins.length} coins...`);
+
+    const uncachedCoins = coins.filter(coin => !this.tickSizeCache.has(coin));
+    if (uncachedCoins.length === 0) {
+      console.log('All coins already cached');
+      return;
+    }
+
+    console.log(`Fetching tick sizes for ${uncachedCoins.length} uncached coins...`);
+    let cached = 0;
+    let failed = 0;
+
+    for (const coin of uncachedCoins) {
+      try {
+        await this.getTickSize(coin);
+        cached++;
+      } catch (error) {
+        failed++;
+      }
+    }
+
+    console.log(`✓ Pre-cached ${cached} tick sizes (${failed} failed)`);
   }
 
   private loadTickSizeCache(): void {
