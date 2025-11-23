@@ -510,18 +510,36 @@ const monitorTrackedWallet = async (
     }
   }, warningCheckInterval);
 
-  process.on('SIGINT', async () => {
-    console.log('\n\n🛑 Monitoring stopped by user');
+  const shutdown = async (signal: string) => {
+    console.log(`\n\n🛑 Monitoring stopped (${signal})`);
     clearInterval(intervalId);
     clearInterval(reconnectCheckId);
     clearInterval(warningCheckId);
-    if (webSocketFillsService) {
-      await webSocketFillsService.close();
+
+    try {
+      if (webSocketFillsService) {
+        await Promise.race([
+          webSocketFillsService.close(),
+          new Promise(resolve => setTimeout(resolve, 1000))
+        ]);
+      }
+      await Promise.race([
+        service.cleanup(),
+        new Promise(resolve => setTimeout(resolve, 1000))
+      ]);
+      await Promise.race([
+        telegramService.stop(),
+        new Promise(resolve => setTimeout(resolve, 1000))
+      ]);
+    } catch (error) {
+      console.error('Error during shutdown:', error);
     }
-    await service.cleanup();
-    await telegramService.stop();
+
     process.exit(0);
-  });
+  };
+
+  process.on('SIGINT', () => shutdown('SIGINT'));
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
 };
 
 const main = async (): Promise<void> => {
