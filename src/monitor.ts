@@ -193,16 +193,20 @@ const monitorTrackedWallet = async (
     lastTradeTimes: Map<string, number>
   ): Promise<void> => {
     const userCoins = new Set(userPositions.map(p => p.coin));
+    const missingPositions = trackedPositions.filter(p => !userCoins.has(p.coin));
 
-    for (const trackedPosition of trackedPositions) {
-      if (userCoins.has(trackedPosition.coin)) {
-        continue;
-      }
+    if (missingPositions.length === 0) {
+      return;
+    }
 
+    console.log(`\n🔍 Checking ${missingPositions.length} missing position(s) for sync opportunities...`);
+
+    for (const trackedPosition of missingPositions) {
       const scaledSize = formatScaledSize(scalePositionSize(trackedPosition.size, balanceRatio));
       const scaledNotionalValue = scaledSize * trackedPosition.markPrice;
 
       if (scaledNotionalValue < minOrderValue) {
+        console.log(`  ⊘ ${trackedPosition.coin} ${trackedPosition.side}: Too small ($${scaledNotionalValue.toFixed(2)} < $${minOrderValue})`);
         continue;
       }
 
@@ -211,13 +215,23 @@ const monitorTrackedWallet = async (
       const side = trackedPosition.side;
 
       let shouldSync = false;
-      if (side === 'long' && currentPrice < trackedEntry) {
-        shouldSync = true;
-      } else if (side === 'short' && currentPrice > trackedEntry) {
-        shouldSync = true;
+      let reason = '';
+      if (side === 'long') {
+        if (currentPrice < trackedEntry) {
+          shouldSync = true;
+        } else {
+          reason = `Current $${currentPrice.toFixed(2)} >= Entry $${trackedEntry.toFixed(2)}`;
+        }
+      } else if (side === 'short') {
+        if (currentPrice > trackedEntry) {
+          shouldSync = true;
+        } else {
+          reason = `Current $${currentPrice.toFixed(2)} <= Entry $${trackedEntry.toFixed(2)}`;
+        }
       }
 
       if (!shouldSync) {
+        console.log(`  ⊘ ${trackedPosition.coin} ${trackedPosition.side}: Price not favorable (${reason})`);
         continue;
       }
 
