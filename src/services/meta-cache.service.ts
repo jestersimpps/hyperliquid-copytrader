@@ -27,7 +27,7 @@ export class MetaCacheService {
     console.log(`✓ Meta cache initialized with ${this.metaCache.size} coins`);
   }
 
-  private async refreshCache(): Promise<void> {
+  async refreshCache(): Promise<void> {
     let lastError: Error | null = null;
 
     for (let attempt = 1; attempt <= this.MAX_RETRIES; attempt++) {

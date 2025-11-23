@@ -31,6 +31,7 @@ export class HyperliquidService {
   private readonly BASE_SLIPPAGE_PERCENT = 1.0;
   private readonly SLIPPAGE_INCREMENT = 0.5;
   private readonly MAX_SLIPPAGE_PERCENT = 3;
+  private readonly ORDER_PLACEMENT_TIMEOUT_MS = 10000;
 
   constructor(privateKey: string | null, walletAddress: string | null, isTestnet: boolean = false, telegramService: TelegramService | null = null) {
     this.isTestnet = isTestnet;
@@ -237,18 +238,36 @@ export class HyperliquidService {
     };
   }
 
-  getCoinIndex(coin: string): number {
-    const index = this.metaCache.getCoinIndexSync(coin);
+  async getCoinIndex(coin: string): Promise<number> {
+    let index = this.metaCache.getCoinIndexSync(coin);
     if (index === null) {
-      throw new Error(`Coin ${coin} not found in metadata cache`);
+      console.warn(`⚠️  Coin ${coin} not found in cache, forcing refresh...`);
+      try {
+        await this.metaCache.refreshCache();
+        index = this.metaCache.getCoinIndexSync(coin);
+        if (index === null) {
+          throw new Error(`Coin ${coin} not found in metadata cache even after refresh`);
+        }
+      } catch (error) {
+        throw new Error(`Failed to refresh metadata cache for ${coin}: ${error instanceof Error ? error.message : String(error)}`);
+      }
     }
     return index;
   }
 
-  private getSizeDecimals(coin: string): number {
-    const decimals = this.metaCache.getSizeDecimalsSync(coin);
+  private async getSizeDecimals(coin: string): Promise<number> {
+    let decimals = this.metaCache.getSizeDecimalsSync(coin);
     if (decimals === null) {
-      throw new Error(`Coin ${coin} not found in metadata cache`);
+      console.warn(`⚠️  Coin ${coin} size decimals not found in cache, forcing refresh...`);
+      try {
+        await this.metaCache.refreshCache();
+        decimals = this.metaCache.getSizeDecimalsSync(coin);
+        if (decimals === null) {
+          throw new Error(`Coin ${coin} size decimals not found in metadata cache even after refresh`);
+        }
+      } catch (error) {
+        throw new Error(`Failed to refresh metadata cache for ${coin}: ${error instanceof Error ? error.message : String(error)}`);
+      }
     }
     return decimals;
   }
@@ -327,8 +346,8 @@ export class HyperliquidService {
     return rounded.toFixed(decimals);
   }
 
-  formatSize(size: number, coin: string): string {
-    const decimals = this.getSizeDecimals(coin);
+  async formatSize(size: number, coin: string): Promise<string> {
+    const decimals = await this.getSizeDecimals(coin);
     return size.toFixed(decimals);
   }
 
@@ -343,30 +362,35 @@ export class HyperliquidService {
   }
 
   async placeMarketBuy(coin: string, size: number, fillPrice: number, reduceOnly: boolean = false): Promise<OrderResponse> {
-    this.ensureWalletClient();
-    const coinIndex = this.getCoinIndex(coin);
-
-    const sizeDecimals = this.getSizeDecimals(coin);
-    const initialFormattedSize = this.formatSize(size, coin);
-    const validationPrice = fillPrice;
-
-    const validationResult = validateAndAdjustOrderSize(
-      size,
-      initialFormattedSize,
-      validationPrice,
-      this.minOrderValue,
-      sizeDecimals
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(`Order placement timed out after ${this.ORDER_PLACEMENT_TIMEOUT_MS}ms`)), this.ORDER_PLACEMENT_TIMEOUT_MS)
     );
 
-    if (validationResult.wasAdjusted) {
-      setImmediate(() => {
-        console.log(`   ⚠️  Adjusted ${coin}: ${initialFormattedSize} → ${validationResult.formattedSize} ($${validationResult.originalOrderValue.toFixed(2)} → $${validationResult.finalOrderValue.toFixed(2)})`);
-      });
-    }
+    const orderPromise = (async () => {
+      this.ensureWalletClient();
+      const coinIndex = await this.getCoinIndex(coin);
 
-    let lastError: Error | null = null;
+      const sizeDecimals = await this.getSizeDecimals(coin);
+      const initialFormattedSize = await this.formatSize(size, coin);
+      const validationPrice = fillPrice;
 
-    for (let attempt = 1; attempt <= this.MAX_RETRIES; attempt++) {
+      const validationResult = validateAndAdjustOrderSize(
+        size,
+        initialFormattedSize,
+        validationPrice,
+        this.minOrderValue,
+        sizeDecimals
+      );
+
+      if (validationResult.wasAdjusted) {
+        setImmediate(() => {
+          console.log(`   ⚠️  Adjusted ${coin}: ${initialFormattedSize} → ${validationResult.formattedSize} ($${validationResult.originalOrderValue.toFixed(2)} → $${validationResult.finalOrderValue.toFixed(2)})`);
+        });
+      }
+
+      let lastError: Error | null = null;
+
+      for (let attempt = 1; attempt <= this.MAX_RETRIES; attempt++) {
       // Calculate progressive slippage for each attempt
       const slippagePercent = this.BASE_SLIPPAGE_PERCENT + (this.SLIPPAGE_INCREMENT * (attempt - 1));
       const orderPrice = fillPrice * (1 + slippagePercent / 100);
@@ -451,38 +475,46 @@ export class HyperliquidService {
       }
     }
 
-    if (lastError && this.telegramService?.isEnabled()) {
-      this.telegramService.sendError(`BUY order failed for ${coin} after ${this.MAX_RETRIES} retries: ${lastError.message}`).catch(() => {});
-    }
+      if (lastError && this.telegramService?.isEnabled()) {
+        this.telegramService.sendError(`BUY order failed for ${coin} after ${this.MAX_RETRIES} retries: ${lastError.message}`).catch(() => {});
+      }
 
-    throw lastError || new Error(`Order failed after ${this.MAX_RETRIES} attempts`);
+      throw lastError || new Error(`Order failed after ${this.MAX_RETRIES} attempts`);
+    })();
+
+    return Promise.race([orderPromise, timeoutPromise]);
   }
 
   async placeMarketSell(coin: string, size: number, fillPrice: number, reduceOnly: boolean = false): Promise<OrderResponse> {
-    this.ensureWalletClient();
-    const coinIndex = this.getCoinIndex(coin);
-
-    const sizeDecimals = this.getSizeDecimals(coin);
-    const initialFormattedSize = this.formatSize(size, coin);
-    const validationPrice = fillPrice;
-
-    const validationResult = validateAndAdjustOrderSize(
-      size,
-      initialFormattedSize,
-      validationPrice,
-      this.minOrderValue,
-      sizeDecimals
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(`Order placement timed out after ${this.ORDER_PLACEMENT_TIMEOUT_MS}ms`)), this.ORDER_PLACEMENT_TIMEOUT_MS)
     );
 
-    if (validationResult.wasAdjusted) {
-      setImmediate(() => {
-        console.log(`   ⚠️  Adjusted ${coin}: ${initialFormattedSize} → ${validationResult.formattedSize} ($${validationResult.originalOrderValue.toFixed(2)} → $${validationResult.finalOrderValue.toFixed(2)})`);
-      });
-    }
+    const orderPromise = (async () => {
+      this.ensureWalletClient();
+      const coinIndex = await this.getCoinIndex(coin);
 
-    let lastError: Error | null = null;
+      const sizeDecimals = await this.getSizeDecimals(coin);
+      const initialFormattedSize = await this.formatSize(size, coin);
+      const validationPrice = fillPrice;
 
-    for (let attempt = 1; attempt <= this.MAX_RETRIES; attempt++) {
+      const validationResult = validateAndAdjustOrderSize(
+        size,
+        initialFormattedSize,
+        validationPrice,
+        this.minOrderValue,
+        sizeDecimals
+      );
+
+      if (validationResult.wasAdjusted) {
+        setImmediate(() => {
+          console.log(`   ⚠️  Adjusted ${coin}: ${initialFormattedSize} → ${validationResult.formattedSize} ($${validationResult.originalOrderValue.toFixed(2)} → $${validationResult.finalOrderValue.toFixed(2)})`);
+        });
+      }
+
+      let lastError: Error | null = null;
+
+      for (let attempt = 1; attempt <= this.MAX_RETRIES; attempt++) {
       // Calculate progressive slippage for each attempt (negative for sells)
       const slippagePercent = this.BASE_SLIPPAGE_PERCENT + (this.SLIPPAGE_INCREMENT * (attempt - 1));
       const orderPrice = fillPrice * (1 - slippagePercent / 100);
@@ -567,11 +599,14 @@ export class HyperliquidService {
       }
     }
 
-    if (lastError && this.telegramService?.isEnabled()) {
-      this.telegramService.sendError(`SELL order failed for ${coin} after ${this.MAX_RETRIES} retries: ${lastError.message}`).catch(() => {});
-    }
+      if (lastError && this.telegramService?.isEnabled()) {
+        this.telegramService.sendError(`SELL order failed for ${coin} after ${this.MAX_RETRIES} retries: ${lastError.message}`).catch(() => {});
+      }
 
-    throw lastError || new Error(`Order failed after ${this.MAX_RETRIES} attempts`);
+      throw lastError || new Error(`Order failed after ${this.MAX_RETRIES} attempts`);
+    })();
+
+    return Promise.race([orderPromise, timeoutPromise]);
   }
 
   async openLong(coin: string, size: number, fillPrice: number): Promise<OrderResponse> {

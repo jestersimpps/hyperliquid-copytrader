@@ -1,4 +1,5 @@
 import { EventClient, WebSocketTransport, WsUserFills } from '@nktkas/hyperliquid';
+import { TelegramService } from './telegram.service';
 
 export class WebSocketFillsService {
   private eventClient: EventClient | null = null;
@@ -14,9 +15,12 @@ export class WebSocketFillsService {
   private reconnectAttempts: number = 0;
   private reconnectTimer: NodeJS.Timeout | null = null;
   private isReconnecting: boolean = false;
+  private telegramService: TelegramService | null = null;
+  private readonly MAX_RECONNECT_ATTEMPTS = 10;
 
-  constructor(isTestnet: boolean = false) {
+  constructor(isTestnet: boolean = false, telegramService?: TelegramService) {
     this.isTestnet = isTestnet;
+    this.telegramService = telegramService || null;
   }
 
   async initialize(trackedWallet: string, onFill: (fill: any) => void): Promise<void> {
@@ -127,6 +131,17 @@ export class WebSocketFillsService {
     if (!this.trackedWallet || !this.onFillCallback) {
       console.error(`✗ Cannot reconnect: missing tracked wallet or callback`);
       return;
+    }
+
+    if (this.reconnectAttempts >= this.MAX_RECONNECT_ATTEMPTS) {
+      const errorMsg = `❌ WebSocket reconnection failed after ${this.MAX_RECONNECT_ATTEMPTS} attempts. Restarting process...`;
+      console.error(errorMsg);
+
+      if (this.telegramService?.isEnabled()) {
+        await this.telegramService.sendError(errorMsg).catch(() => {});
+      }
+
+      process.exit(1);
     }
 
     console.log(`⟳ Attempting WebSocket reconnection (attempt ${this.reconnectAttempts})...`);

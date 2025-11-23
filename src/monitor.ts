@@ -169,6 +169,7 @@ const monitorTrackedWallet = async (
   const config = loadConfig();
   const riskMonitor = new RiskMonitorService(config);
   let lastFillReceivedTime: number = Date.now();
+  let isUpdatingBalance: boolean = false;
 
   console.log('\n🚀 Copy Trading Bot Started\n');
   console.log(`📊 Tracked Wallet: ${trackedWallet}`);
@@ -279,19 +280,40 @@ const monitorTrackedWallet = async (
   const updateBalanceRatio = async (): Promise<void> => {
     if (!userWallet) return;
 
-    const [trackedBalance, userBalance, userPositions, trackedPositions] = await Promise.all([
-      service.getAccountBalance(trackedWallet),
-      service.getAccountBalance(userWallet),
-      service.getOpenPositions(userWallet),
-      service.getOpenPositions(trackedWallet)
-    ]);
+    isUpdatingBalance = true;
+    try {
+      const results = await Promise.allSettled([
+        service.getAccountBalance(trackedWallet),
+        service.getAccountBalance(userWallet),
+        service.getOpenPositions(userWallet),
+        service.getOpenPositions(trackedWallet)
+      ]);
 
-    const coins = trackedPositions.map(p => p.coin);
-    if (coins.length > 0) {
-      await service.preCacheTickSizes(coins);
-    }
+      if (results.some(r => r.status === 'rejected')) {
+        const errors = results.map((r, i) => r.status === 'rejected' ? `${['trackedBalance', 'userBalance', 'userPositions', 'trackedPositions'][i]}: ${r.reason}` : null).filter(Boolean);
+        console.error(`⚠️  Balance update failed partially: ${errors.join(', ')}`);
 
-    const oldRatio = balanceRatio;
+        if (results.every(r => r.status === 'rejected')) {
+          throw new Error('All balance update API calls failed');
+        }
+      }
+
+      const trackedBalance = results[0].status === 'fulfilled' ? results[0].value : null;
+      const userBalance = results[1].status === 'fulfilled' ? results[1].value : null;
+      const userPositions = results[2].status === 'fulfilled' ? results[2].value : [];
+      const trackedPositions = results[3].status === 'fulfilled' ? results[3].value : [];
+
+      if (!trackedBalance || !userBalance) {
+        console.error('⚠️  Cannot update balance ratio without account balances, skipping...');
+        return;
+      }
+
+      const coins = trackedPositions.map(p => p.coin);
+      if (coins.length > 0) {
+        await service.preCacheTickSizes(coins);
+      }
+
+      const oldRatio = balanceRatio;
     const newRatio = calculateBalanceRatio(
       parseFloat(userBalance.accountValue),
       parseFloat(trackedBalance.accountValue)
@@ -494,7 +516,10 @@ const monitorTrackedWallet = async (
       }
     }
 
-    lastBalanceUpdate = Date.now();
+      lastBalanceUpdate = Date.now();
+    } finally {
+      isUpdatingBalance = false;
+    }
   };
 
   const poll = async (): Promise<void> => {
@@ -510,13 +535,23 @@ const monitorTrackedWallet = async (
           if (userWallet) {
             tradeHistoryService = new TradeHistoryService(service.publicClient, balanceRatio);
 
-            webSocketFillsService = new WebSocketFillsService(isTestnet);
+            webSocketFillsService = new WebSocketFillsService(isTestnet, telegramService);
             try {
               await webSocketFillsService.initialize(trackedWallet, (fill) => {
+                if (!tradeHistoryService) {
+                  console.warn(`⚠️  Received fill for ${fill.coin} but TradeHistoryService not ready yet, skipping...`);
+                  return;
+                }
+
+                if (isUpdatingBalance) {
+                  console.warn(`⚠️  Received fill for ${fill.coin} during balance update, skipping to avoid race condition...`);
+                  return;
+                }
+
                 processFill(
                   fill,
                   service,
-                  tradeHistoryService!,
+                  tradeHistoryService,
                   userWallet,
                   telegramService,
                   Date.now(),
@@ -527,6 +562,10 @@ const monitorTrackedWallet = async (
                 ).catch((error) => {
                   const errorMessage = error instanceof Error ? error.message : String(error);
                   console.error(`✗ Fatal error processing fill: ${errorMessage}`);
+
+                  if (telegramService.isEnabled()) {
+                    telegramService.sendError(`Fatal error processing fill for ${fill.coin}: ${errorMessage}`).catch(() => {});
+                  }
                 });
               });
               console.log('✓ Real-time WebSocket monitoring active\n');
