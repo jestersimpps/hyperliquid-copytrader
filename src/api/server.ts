@@ -243,6 +243,70 @@ app.get('/api/daily-summary', (req: Request, res: Response) => {
   }
 });
 
+app.get('/api/health', (req: Request, res: Response) => {
+  try {
+    const healthFilePath = path.join(DATA_DIR, 'health-status.json');
+
+    if (!fs.existsSync(healthFilePath)) {
+      return res.json({
+        status: 'unknown',
+        message: 'Health monitor not yet initialized',
+        timestamp: Date.now()
+      });
+    }
+
+    const healthData = JSON.parse(fs.readFileSync(healthFilePath, 'utf-8'));
+    const timeSinceUpdate = Date.now() - healthData.timestamp;
+
+    if (timeSinceUpdate > 5 * 60 * 1000) {
+      return res.json({
+        status: 'unhealthy',
+        message: 'Health data is stale (>5min old)',
+        lastUpdate: healthData.timestamp,
+        timeSinceUpdate
+      });
+    }
+
+    res.json(healthData);
+  } catch (error) {
+    console.error('Error reading health status:', error);
+    res.status(500).json({
+      status: 'unhealthy',
+      error: 'Failed to read health status',
+      timestamp: Date.now()
+    });
+  }
+});
+
+app.get('/api/metrics', (req: Request, res: Response) => {
+  try {
+    const healthFilePath = path.join(DATA_DIR, 'health-status.json');
+
+    if (!fs.existsSync(healthFilePath)) {
+      return res.json({
+        message: 'Metrics not available yet',
+        timestamp: Date.now()
+      });
+    }
+
+    const healthData = JSON.parse(fs.readFileSync(healthFilePath, 'utf-8'));
+
+    res.json({
+      uptime: healthData.metrics?.uptime || 0,
+      orderSuccessRate: healthData.metrics?.orderSuccessRate || 100,
+      fillProcessingRate: healthData.metrics?.fillProcessingRate || 100,
+      lastFillTime: healthData.metrics?.lastFillTime,
+      consecutiveErrors: healthData.metrics?.consecutiveErrors || 0,
+      websocketConnected: healthData.checks?.websocket?.healthy || false,
+      apiHealthy: healthData.checks?.api?.healthy || false,
+      timestamp: healthData.timestamp
+    });
+  } catch (error) {
+    console.error('Error reading metrics:', error);
+    res.status(500).json({ error: 'Failed to read metrics' });
+  }
+});
+
 app.listen(PORT, HOST, () => {
   console.log(`📊 Dashboard server running on ${HOST}:${PORT}`);
   console.log(`📁 Serving snapshots from: ${DATA_DIR}`);

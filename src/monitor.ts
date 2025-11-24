@@ -7,6 +7,7 @@ import { PositionMonitorService } from './services/position-monitor.service';
 import { SnapshotLoggerService } from './services/snapshot-logger.service';
 import { RiskMonitorService } from './services/risk-monitor.service';
 import { TradeLoggerService } from './services/trade-logger.service';
+import { HealthMonitorService } from './services/health-monitor.service';
 import { calculateBalanceRatio, scalePositionSize, formatScaledSize } from './utils/scaling.utils';
 import { loadConfig } from './config';
 import { Position } from './models/position.model';
@@ -34,14 +35,19 @@ const processFill = async (
   lastTradeTimes: Map<string, number>,
   tradeLogger: TradeLoggerService,
   balanceRatio: number,
-  updateLastFillTime: () => void
+  updateLastFillTime: () => void,
+  healthMonitor: HealthMonitorService | null = null
 ): Promise<FillProcessingResult> => {
   try {
     updateLastFillTime();
+    healthMonitor?.recordFillSuccess();
 
     const action = tradeHistoryService.determineAction(fill);
     if (!action) return { success: true, coin: fill.coin };
-    if (!service.canExecuteTrades()) return { success: true, coin: fill.coin, action: action.action };
+
+    if (!service.canExecuteTrades() || (healthMonitor && !healthMonitor.canExecuteTrades())) {
+      return { success: true, coin: fill.coin, action: action.action };
+    }
 
     // Log async to avoid blocking
     setImmediate(() => {
@@ -113,11 +119,15 @@ const processFill = async (
     }
 
     lastTradeTimes.set(action.coin, Date.now());
+    healthMonitor?.recordOrderSuccess();
 
     return { success: true, coin: action.coin, action: action.action };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     setImmediate(() => console.error(`✗ ${fill.coin} failed: ${errorMessage}`));
+
+    healthMonitor?.recordOrderFailure();
+    healthMonitor?.recordFillError();
 
     const isCriticalError = !errorMessage.toLowerCase().includes('position') &&
                            !errorMessage.toLowerCase().includes('reduce') &&
@@ -168,6 +178,7 @@ const monitorTrackedWallet = async (
   const tradeLogger = new TradeLoggerService();
   const config = loadConfig();
   const riskMonitor = new RiskMonitorService(config);
+  const healthMonitor = new HealthMonitorService();
   let lastFillReceivedTime: number = Date.now();
   let isUpdatingBalance: boolean = false;
 
@@ -320,6 +331,7 @@ const monitorTrackedWallet = async (
     );
 
     balanceRatio = newRatio;
+    healthMonitor.updateBalanceRatio(newRatio);
 
     if (tradeHistoryService) {
       tradeHistoryService = new TradeHistoryService(service.publicClient, newRatio);
@@ -558,7 +570,8 @@ const monitorTrackedWallet = async (
                   lastTradeTimes,
                   tradeLogger,
                   balanceRatio,
-                  () => { lastFillReceivedTime = Date.now(); }
+                  () => { lastFillReceivedTime = Date.now(); },
+                  healthMonitor
                 ).catch((error) => {
                   const errorMessage = error instanceof Error ? error.message : String(error);
                   console.error(`✗ Fatal error processing fill: ${errorMessage}`);
@@ -569,6 +582,9 @@ const monitorTrackedWallet = async (
                 });
               });
               console.log('✓ Real-time WebSocket monitoring active\n');
+
+              healthMonitor.initialize(telegramService, service, webSocketFillsService);
+              console.log('✓ Health monitoring initialized\n');
 
               if (telegramService.isEnabled()) {
                 await telegramService.sendMessage(`✓ WebSocket connected - monitoring ${trackedWallet}`);
@@ -660,11 +676,37 @@ const monitorTrackedWallet = async (
     }
   }, warningCheckInterval);
 
+  const healthCheckInterval = 1 * 60 * 1000;
+  const healthCheckId = setInterval(async () => {
+    if (!webSocketFillsService || !userWallet) return;
+
+    try {
+      const health = await healthMonitor.runHealthChecks();
+
+      if (health.status === 'unhealthy') {
+        console.error(`❌ Health check FAILED: System unhealthy`);
+        if (telegramService.isEnabled()) {
+          const unhealthyChecks = Object.entries(health.checks)
+            .filter(([_, check]) => !check.healthy)
+            .map(([name, check]) => `${name}: ${check.message}`)
+            .join('\n');
+
+          await telegramService.sendError(`⚠️ Health Check Failed:\n${unhealthyChecks}`);
+        }
+      } else if (health.status === 'degraded') {
+        console.warn(`⚠️  Health check: System degraded`);
+      }
+    } catch (error) {
+      console.error(`✗ Health check error:`, error);
+    }
+  }, healthCheckInterval);
+
   const restart = async () => {
     console.log(`\n\n🔄 Bot restarting (Telegram command)`);
     clearInterval(intervalId);
     clearInterval(reconnectCheckId);
     clearInterval(warningCheckId);
+    clearInterval(healthCheckId);
 
     try {
       if (webSocketFillsService) {
@@ -693,6 +735,7 @@ const monitorTrackedWallet = async (
     clearInterval(intervalId);
     clearInterval(reconnectCheckId);
     clearInterval(warningCheckId);
+    clearInterval(healthCheckId);
 
     try {
       if (webSocketFillsService) {
