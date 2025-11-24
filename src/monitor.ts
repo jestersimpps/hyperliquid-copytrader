@@ -482,7 +482,7 @@ const monitorTrackedWallet = async (
       }
     }
 
-    if (service.canExecuteTrades()) {
+    if (isFirstRun && service.canExecuteTrades()) {
       await syncMissingPositions(
         trackedPositions,
         userPositions,
