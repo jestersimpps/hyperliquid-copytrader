@@ -633,11 +633,16 @@ const monitorTrackedWallet = async (
 
   const intervalId = setInterval(poll, pollInterval);
 
-  // Heartbeat check 1: Force reconnect if no fills for 1 minute
-  const reconnectCheckInterval = 30 * 1000; // Check every 30 seconds
-  const reconnectThreshold = 1 * 60 * 1000; // 1 minute without fills
+  const reconnectCheckInterval = 30 * 1000;
+  const reconnectThreshold = 5 * 60 * 1000;
   const reconnectCheckId = setInterval(async () => {
     if (!webSocketFillsService || !userWallet) return;
+
+    const stats = webSocketFillsService.getConnectionStats();
+
+    if (stats.isReconnecting || stats.reconnectAttempts > 0 || !stats.isConnected) {
+      return;
+    }
 
     const now = Date.now();
     const timeSinceLastFill = now - lastFillReceivedTime;

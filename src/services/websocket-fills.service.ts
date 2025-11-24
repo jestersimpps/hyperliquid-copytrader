@@ -39,12 +39,19 @@ export class WebSocketFillsService {
       this.wsTransport = new WebSocketTransport({ url: wsUrl });
       this.eventClient = new EventClient({ transport: this.wsTransport });
 
-      this.subscription = await this.eventClient.userFills(
-        { user: trackedWallet as `0x${string}` },
-        (data: WsUserFills) => {
-          this.handleFills(data);
-        }
-      );
+      const connectionTimeout = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error('WebSocket connection timeout after 30 seconds')), 30000);
+      });
+
+      this.subscription = await Promise.race([
+        this.eventClient.userFills(
+          { user: trackedWallet as `0x${string}` },
+          (data: WsUserFills) => {
+            this.handleFills(data);
+          }
+        ),
+        connectionTimeout
+      ]);
 
       this.lastConnectedAt = Date.now();
       this.reconnectAttempts = 0;
@@ -160,6 +167,7 @@ export class WebSocketFillsService {
       console.error(`✗ Reconnection attempt ${this.reconnectAttempts} failed: ${errorMessage}`);
       this.onFillCallback = savedCallback;
       this.trackedWallet = savedWallet;
+      this.isReconnecting = false;
     }
   }
 
@@ -168,11 +176,19 @@ export class WebSocketFillsService {
       throw new Error('Cannot reconnect: service not initialized');
     }
 
+    if (this.isReconnecting) {
+      console.log(`⟳ Reconnection already in progress, skipping force reconnect`);
+      return;
+    }
+
     console.log(`⟳ Force reconnecting WebSocket...`);
-    this.reconnectAttempts = 0;
     this.isReconnecting = true;
 
-    // Save callback before close() clears it
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+
     const savedWallet = this.trackedWallet;
     const savedCallback = this.onFillCallback;
 
@@ -189,12 +205,14 @@ export class WebSocketFillsService {
     lastConnectedAt: number | null;
     lastFillReceivedAt: number | null;
     reconnectAttempts: number;
+    isReconnecting: boolean;
   } {
     return {
       isConnected: this.isConnected(),
       lastConnectedAt: this.lastConnectedAt,
       lastFillReceivedAt: this.lastFillReceivedAt,
-      reconnectAttempts: this.reconnectAttempts
+      reconnectAttempts: this.reconnectAttempts,
+      isReconnecting: this.isReconnecting
     };
   }
 
