@@ -1,6 +1,6 @@
 import { TelegramService } from './telegram.service';
 import { HyperliquidService } from './hyperliquid.service';
-import { WebSocketFillsService } from './websocket-fills.service';
+import { WebSocketPoolService } from './websocket-pool.service';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -54,7 +54,7 @@ export interface HealthIncident {
 export class HealthMonitorService {
   private telegramService: TelegramService | null = null;
   private hyperliquidService: HyperliquidService | null = null;
-  private webSocketService: WebSocketFillsService | null = null;
+  private webSocketPool: WebSocketPoolService | null = null;
 
   private orderSuccessCount: number = 0;
   private orderFailureCount: number = 0;
@@ -85,11 +85,11 @@ export class HealthMonitorService {
   initialize(
     telegramService: TelegramService,
     hyperliquidService: HyperliquidService,
-    webSocketService: WebSocketFillsService
+    webSocketPool: WebSocketPoolService
   ): void {
     this.telegramService = telegramService;
     this.hyperliquidService = hyperliquidService;
-    this.webSocketService = webSocketService;
+    this.webSocketPool = webSocketPool;
   }
 
   recordOrderSuccess(): void {
@@ -203,24 +203,37 @@ export class HealthMonitorService {
   }
 
   private async checkWebSocket(): Promise<HealthCheckResult> {
-    if (!this.webSocketService) {
-      return { healthy: false, message: 'WebSocket service not initialized' };
+    if (!this.webSocketPool) {
+      return { healthy: false, message: 'WebSocket pool not initialized' };
     }
 
-    const stats = this.webSocketService.getConnectionStats();
+    const stats = this.webSocketPool.getPoolStats();
 
-    if (!stats.isConnected) {
+    if (stats.activeConnections === 0) {
       return {
         healthy: false,
-        message: 'WebSocket disconnected',
-        details: { reconnectAttempts: stats.reconnectAttempts }
+        message: 'All WebSocket connections down',
+        details: { healthStatus: stats.healthStatus }
       };
     }
 
+    if (stats.healthStatus === 'critical') {
+      return {
+        healthy: false,
+        message: `WebSocket pool critical: ${stats.activeConnections}/${stats.totalConnections} connections`,
+        details: { connections: stats.connections }
+      };
+    }
+
+    const mostRecentFillTime = stats.connections
+      .map(conn => conn.lastFillReceivedAt)
+      .filter(t => t !== null)
+      .sort((a, b) => (b || 0) - (a || 0))[0];
+
     const timeSinceLastFill = this.lastFillTime
       ? Date.now() - this.lastFillTime
-      : stats.lastFillReceivedAt
-        ? Date.now() - stats.lastFillReceivedAt
+      : mostRecentFillTime
+        ? Date.now() - mostRecentFillTime
         : null;
 
     if (timeSinceLastFill && timeSinceLastFill > 600000) {
@@ -231,7 +244,19 @@ export class HealthMonitorService {
       };
     }
 
-    return { healthy: true, message: 'WebSocket connected and active' };
+    if (stats.healthStatus === 'degraded') {
+      return {
+        healthy: true,
+        message: `WebSocket pool degraded: ${stats.activeConnections}/${stats.totalConnections} connections`,
+        details: { connections: stats.connections }
+      };
+    }
+
+    return {
+      healthy: true,
+      message: `WebSocket pool healthy: ${stats.activeConnections}/${stats.totalConnections} connections`,
+      details: { totalFills: stats.totalFillsReceived }
+    };
   }
 
   private async checkAPI(): Promise<HealthCheckResult> {

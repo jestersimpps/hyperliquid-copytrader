@@ -1,7 +1,8 @@
 import './setup';
 import { HyperliquidService } from './services/hyperliquid.service';
 import { TradeHistoryService } from './services/trade-history.service';
-import { WebSocketFillsService } from './services/websocket-fills.service';
+import { FillQueueService } from './services/fill-queue.service';
+import { WebSocketPoolService } from './services/websocket-pool.service';
 import { TelegramService } from './services/telegram.service';
 import { PositionMonitorService } from './services/position-monitor.service';
 import { SnapshotLoggerService } from './services/snapshot-logger.service';
@@ -169,7 +170,8 @@ const monitorTrackedWallet = async (
   const startTime = Date.now();
   let balanceRatio = 1;
   let tradeHistoryService: TradeHistoryService | null = null;
-  let webSocketFillsService: WebSocketFillsService | null = null;
+  let fillQueue: FillQueueService | null = null;
+  let webSocketPool: WebSocketPoolService | null = null;
   let lastBalanceUpdate = 0;
   const BALANCE_UPDATE_INTERVAL = 1 * 60 * 1000;
   const lastTradeTimes = new Map<string, number>();
@@ -547,54 +549,57 @@ const monitorTrackedWallet = async (
           if (userWallet) {
             tradeHistoryService = new TradeHistoryService(service.publicClient, balanceRatio);
 
-            webSocketFillsService = new WebSocketFillsService(isTestnet, telegramService);
-            try {
-              await webSocketFillsService.initialize(trackedWallet, (fill) => {
-                if (!tradeHistoryService) {
-                  console.warn(`⚠️  Received fill for ${fill.coin} but TradeHistoryService not ready yet, skipping...`);
-                  return;
+            fillQueue = new FillQueueService();
+            fillQueue.setFillProcessor(async (fill, connectionId) => {
+              if (!tradeHistoryService) {
+                console.warn(`⚠️  Received fill for ${fill.coin} but TradeHistoryService not ready yet, skipping...`);
+                return;
+              }
+
+              if (isUpdatingBalance) {
+                console.warn(`⚠️  Received fill for ${fill.coin} during balance update, skipping to avoid race condition...`);
+                return;
+              }
+
+              await processFill(
+                fill,
+                service,
+                tradeHistoryService,
+                userWallet,
+                telegramService,
+                Date.now(),
+                lastTradeTimes,
+                tradeLogger,
+                balanceRatio,
+                () => { lastFillReceivedTime = Date.now(); },
+                healthMonitor
+              ).catch((error) => {
+                const errorMessage = error instanceof Error ? error.message : String(error);
+                console.error(`✗ Fatal error processing fill from Connection ${connectionId}: ${errorMessage}`);
+
+                if (telegramService.isEnabled()) {
+                  telegramService.sendError(`Fatal error processing fill for ${fill.coin}: ${errorMessage}`).catch(() => {});
                 }
-
-                if (isUpdatingBalance) {
-                  console.warn(`⚠️  Received fill for ${fill.coin} during balance update, skipping to avoid race condition...`);
-                  return;
-                }
-
-                processFill(
-                  fill,
-                  service,
-                  tradeHistoryService,
-                  userWallet,
-                  telegramService,
-                  Date.now(),
-                  lastTradeTimes,
-                  tradeLogger,
-                  balanceRatio,
-                  () => { lastFillReceivedTime = Date.now(); },
-                  healthMonitor
-                ).catch((error) => {
-                  const errorMessage = error instanceof Error ? error.message : String(error);
-                  console.error(`✗ Fatal error processing fill: ${errorMessage}`);
-
-                  if (telegramService.isEnabled()) {
-                    telegramService.sendError(`Fatal error processing fill for ${fill.coin}: ${errorMessage}`).catch(() => {});
-                  }
-                });
               });
-              console.log('✓ Real-time WebSocket monitoring active\n');
+            });
 
-              healthMonitor.initialize(telegramService, service, webSocketFillsService);
+            webSocketPool = new WebSocketPoolService(3, fillQueue, isTestnet, telegramService);
+            try {
+              await webSocketPool.initializeAll(trackedWallet);
+              console.log('✓ Real-time WebSocket monitoring active (3 connections)\n');
+
+              healthMonitor.initialize(telegramService, service, webSocketPool);
               console.log('✓ Health monitoring initialized\n');
 
               if (telegramService.isEnabled()) {
-                await telegramService.sendMessage(`✓ WebSocket connected - monitoring ${trackedWallet}`);
+                await telegramService.sendMessage(`✓ WebSocket pool connected - monitoring ${trackedWallet}\n3 redundant connections active`);
               }
             } catch (error) {
               const errorMessage = error instanceof Error ? error.message : String(error);
-              console.error(`✗ Failed to initialize WebSocket: ${errorMessage}`);
+              console.error(`✗ Failed to initialize WebSocket pool: ${errorMessage}`);
 
               if (telegramService.isEnabled()) {
-                await telegramService.sendError(`Failed to initialize WebSocket: ${errorMessage}`);
+                await telegramService.sendError(`Failed to initialize WebSocket pool: ${errorMessage}`);
               }
             }
           }
@@ -602,18 +607,22 @@ const monitorTrackedWallet = async (
         }
       }
 
-      if (webSocketFillsService && !isFirstRun) {
-        const stats = webSocketFillsService.getConnectionStats();
+      if (webSocketPool && !isFirstRun) {
+        const stats = webSocketPool.getPoolStats();
 
-        if (!stats.isConnected) {
-          console.warn(`⚠️  WebSocket disconnected - automatic reconnection active (attempt ${stats.reconnectAttempts})...`);
+        if (stats.healthStatus === 'critical') {
+          console.warn(`⚠️  WebSocket pool: CRITICAL - ${stats.activeConnections}/${stats.totalConnections} connections active`);
+        } else if (stats.healthStatus === 'degraded') {
+          console.warn(`⚠️  WebSocket pool: DEGRADED - ${stats.activeConnections}/${stats.totalConnections} connections active`);
         }
       }
 
       if (shouldUpdateBalance && !isFirstRun) {
-        const stats = webSocketFillsService?.getConnectionStats();
-        const wsStatus = stats?.isConnected ? '✓ WebSocket active' : '⚠️  WebSocket disconnected';
-        console.log(`[${formatTimestamp(new Date())}] ✓ Balance updated - ${wsStatus}`);
+        const stats = webSocketPool?.getPoolStats();
+        const wsStatus = stats
+          ? `${stats.activeConnections}/${stats.totalConnections} connections (${stats.healthStatus})`
+          : 'not initialized';
+        console.log(`[${formatTimestamp(new Date())}] ✓ Balance updated - WebSocket: ${wsStatus}`);
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
@@ -633,40 +642,12 @@ const monitorTrackedWallet = async (
 
   const intervalId = setInterval(poll, pollInterval);
 
-  const reconnectCheckInterval = 30 * 1000;
-  const reconnectThreshold = 5 * 60 * 1000;
-  const reconnectCheckId = setInterval(async () => {
-    if (!webSocketFillsService || !userWallet) return;
-
-    const stats = webSocketFillsService.getConnectionStats();
-
-    if (stats.isReconnecting || stats.reconnectAttempts > 0 || !stats.isConnected) {
-      return;
-    }
-
-    const now = Date.now();
-    const timeSinceLastFill = now - lastFillReceivedTime;
-
-    if (timeSinceLastFill > reconnectThreshold) {
-      console.warn(`⚠️  No fills received for ${Math.floor(timeSinceLastFill / 1000)} seconds - reconnecting WebSocket`);
-
-      try {
-        await webSocketFillsService.forceReconnect();
-        lastFillReceivedTime = Date.now();
-        console.log(`✓ WebSocket force reconnected due to inactivity`);
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        console.error(`✗ Reconnection failed: ${errorMessage}`);
-      }
-    }
-  }, reconnectCheckInterval);
-
-  // Heartbeat check 2: Warning if no fills for 5 minutes
-  const warningCheckInterval = 5 * 60 * 1000; // Check every 5 minutes
-  const warningThreshold = 5 * 60 * 1000; // 5 minutes without fills
+  // Heartbeat check: Warning if no fills for 5 minutes
+  const warningCheckInterval = 5 * 60 * 1000;
+  const warningThreshold = 5 * 60 * 1000;
   let lastWarningTime = 0;
   const warningCheckId = setInterval(async () => {
-    if (!webSocketFillsService || !userWallet) return;
+    if (!webSocketPool || !userWallet) return;
 
     const now = Date.now();
     const timeSinceLastFill = now - lastFillReceivedTime;
@@ -683,7 +664,7 @@ const monitorTrackedWallet = async (
 
   const healthCheckInterval = 1 * 60 * 1000;
   const healthCheckId = setInterval(async () => {
-    if (!webSocketFillsService || !userWallet) return;
+    if (!webSocketPool || !userWallet) return;
 
     try {
       const health = await healthMonitor.runHealthChecks();
@@ -709,16 +690,18 @@ const monitorTrackedWallet = async (
   const restart = async () => {
     console.log(`\n\n🔄 Bot restarting (Telegram command)`);
     clearInterval(intervalId);
-    clearInterval(reconnectCheckId);
     clearInterval(warningCheckId);
     clearInterval(healthCheckId);
 
     try {
-      if (webSocketFillsService) {
+      if (webSocketPool) {
         await Promise.race([
-          webSocketFillsService.close(),
+          webSocketPool.closeAll(),
           new Promise(resolve => setTimeout(resolve, 1000))
         ]);
+      }
+      if (fillQueue) {
+        fillQueue.clear();
       }
       await Promise.race([
         service.cleanup(),
@@ -738,16 +721,18 @@ const monitorTrackedWallet = async (
   const shutdown = async (signal: string) => {
     console.log(`\n\n🛑 Monitoring stopped (${signal})`);
     clearInterval(intervalId);
-    clearInterval(reconnectCheckId);
     clearInterval(warningCheckId);
     clearInterval(healthCheckId);
 
     try {
-      if (webSocketFillsService) {
+      if (webSocketPool) {
         await Promise.race([
-          webSocketFillsService.close(),
+          webSocketPool.closeAll(),
           new Promise(resolve => setTimeout(resolve, 1000))
         ]);
+      }
+      if (fillQueue) {
+        fillQueue.clear();
       }
       await Promise.race([
         service.cleanup(),
