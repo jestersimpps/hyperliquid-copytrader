@@ -2,8 +2,8 @@ module.exports = {
   apps: [
     {
       name: 'hyperscalper',
-      script: 'npm',
-      args: 'start',
+      script: 'node_modules/.bin/tsx',
+      args: 'src/index.ts',
       cwd: '.',
       instances: 1,
       autorestart: true,
@@ -20,8 +20,8 @@ module.exports = {
     },
     {
       name: 'hyperscalper-dashboard',
-      script: 'npm',
-      args: 'run dashboard',
+      script: 'node_modules/.bin/tsx',
+      args: 'src/api/server.ts',
       cwd: '.',
       instances: 1,
       autorestart: true,
