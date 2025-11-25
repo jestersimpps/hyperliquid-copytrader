@@ -671,7 +671,7 @@
       if (chartInstances['balance-chart']) chartInstances['balance-chart'].destroy();
       chartInstances['balance-chart'] = new Chart(document.getElementById('balance-chart').getContext('2d'), {
         ...getChartConfig('line', {
-          legend: { position: 'top', align: 'start' },
+          legend: { position: 'bottom' },
           yScale: {
             title: { display: true, text: 'Change (%)', color: '#8899a6' },
             ticks: { color: '#8899a6', font: { size: 11 }, callback: v => v.toFixed(2) + '%' }
@@ -709,7 +709,7 @@
       if (chartInstances['pnl-chart']) chartInstances['pnl-chart'].destroy();
       chartInstances['pnl-chart'] = new Chart(document.getElementById('pnl-chart').getContext('2d'), {
         ...getChartConfig('line', {
-          legend: { position: 'top', align: 'start' },
+          legend: { position: 'bottom' },
           yScale: {
             title: { display: true, text: '% of Balance', color: '#8899a6' },
             ticks: { color: '#8899a6', font: { size: 11 }, callback: v => v.toFixed(2) + '%' }
@@ -782,7 +782,7 @@
       if (chartInstances['positions-chart']) chartInstances['positions-chart'].destroy();
       chartInstances['positions-chart'] = new Chart(document.getElementById('positions-chart').getContext('2d'), {
         ...getChartConfig('line', {
-          legend: { position: 'right' },
+          legend: { position: 'bottom' },
           yScale: {
             title: { display: true, text: '% of Balance', color: '#8899a6' },
             ticks: { color: '#8899a6', font: { size: 11 }, callback: v => v.toFixed(1) + '%' }
@@ -857,7 +857,7 @@
 
       chartInstances['realized-pnl-chart'] = new Chart(ctx, {
         ...getChartConfig('line', {
-          legend: { position: 'top', align: 'start' },
+          legend: { position: 'bottom' },
           yScale: {
             title: { display: true, text: 'Cumulative Realized PNL ($)', color: '#8899a6' },
             ticks: { color: '#8899a6', font: { size: 11 }, callback: v => '$' + v.toFixed(2) }
@@ -875,7 +875,7 @@
       if (chartInstances['drawdown-chart']) chartInstances['drawdown-chart'].destroy();
       chartInstances['drawdown-chart'] = new Chart(document.getElementById('drawdown-chart').getContext('2d'), {
         ...getChartConfig('line', {
-          legend: { position: 'bottom', align: 'start' },
+          legend: { position: 'bottom' },
           yScale: {
             title: { display: true, text: 'Drawdown (%)', color: '#8899a6' },
             ticks: { color: '#8899a6', font: { size: 11 }, callback: v => v.toFixed(2) + '%' }
@@ -948,7 +948,7 @@
       if (chartInstances['entry-diff-chart']) chartInstances['entry-diff-chart'].destroy();
       chartInstances['entry-diff-chart'] = new Chart(document.getElementById('entry-diff-chart').getContext('2d'), {
         ...getChartConfig('line', {
-          legend: { position: 'right' },
+          legend: { position: 'bottom' },
           yScale: {
             title: { display: true, text: 'Entry Price Difference (%)', color: '#8899a6' },
             ticks: { color: '#8899a6', font: { size: 11 }, callback: v => v.toFixed(2) + '%' }
@@ -964,7 +964,7 @@
       if (chartInstances['risk-chart']) chartInstances['risk-chart'].destroy();
       chartInstances['risk-chart'] = new Chart(document.getElementById('risk-chart').getContext('2d'), {
         ...getChartConfig('line', {
-          legend: { position: 'top', align: 'start' },
+          legend: { position: 'bottom' },
           y2Scale: { title: { display: true, text: 'Margin Ratio (%)', color: '#8899a6' } }
         }),
         data: {
