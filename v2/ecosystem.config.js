@@ -12,8 +12,6 @@ module.exports = {
       env: {
         NODE_ENV: 'production'
       },
-      error_file: './logs/error.log',
-      out_file: './logs/out.log',
       time: true,
       restart_delay: 5000,
       kill_timeout: 10000
@@ -31,8 +29,6 @@ module.exports = {
         NODE_ENV: 'production',
         PORT: 3000
       },
-      error_file: './logs/dashboard-error.log',
-      out_file: './logs/dashboard-out.log',
       time: true,
       restart_delay: 5000
     }
