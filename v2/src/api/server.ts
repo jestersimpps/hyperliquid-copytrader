@@ -64,10 +64,23 @@ app.get('/api/user-snapshots', (req: Request, res: Response) => {
       .map(line => {
         const snapshot = JSON.parse(line)
         if (snapshot.user) {
+          const positions = snapshot.user.positions || []
+          const totalUnrealizedPnl = positions.reduce(
+            (sum: number, p: { unrealizedPnl?: number }) => sum + (p.unrealizedPnl || 0),
+            0
+          )
+          const totalMarginUsed = positions.reduce(
+            (sum: number, p: { marginUsed?: number }) => sum + (p.marginUsed || 0),
+            0
+          )
           return {
             timestamp: snapshot.timestamp,
             date: snapshot.date,
-            wallet: snapshot.user
+            wallet: {
+              ...snapshot.user,
+              totalUnrealizedPnl,
+              totalMarginUsed
+            }
           }
         }
         return null
