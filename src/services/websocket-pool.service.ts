@@ -103,16 +103,16 @@ export class WebSocketPoolService {
   private checkInactivity(): void {
     const now = Date.now();
 
-    // Staggered thresholds to prevent simultaneous reconnects
-    // Using intervals that don't share common multiples to avoid collisions
-    // Connection 1: 70s (1m 10s) - fast detection
-    // Connection 2: 3m (180s) - medium detection
-    // Connection 3: 5m (300s) - conservative detection
-    // LCM(70, 300) = 2100s (35 minutes) before first overlap
+    // Conservative fallback thresholds (ping/pong health check is primary at 45s)
+    // These only trigger if ping/pong health check fails to catch issues
+    // Staggered to prevent simultaneous reconnects during extended quiet periods
+    // Connection 1: 15m - fallback for fast detection
+    // Connection 2: 20m - fallback for medium detection
+    // Connection 3: 30m - fallback for conservative detection
     const thresholds = [
-      70 * 1000,          // Connection 1: 70 seconds (1m 10s)
-      3 * 60 * 1000,      // Connection 2: 180 seconds (3 minutes)
-      5 * 60 * 1000       // Connection 3: 300 seconds (5 minutes)
+      15 * 60 * 1000,     // Connection 1: 15 minutes
+      20 * 60 * 1000,     // Connection 2: 20 minutes
+      30 * 60 * 1000      // Connection 3: 30 minutes
     ];
 
     for (const connection of this.connections) {

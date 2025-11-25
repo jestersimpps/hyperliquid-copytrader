@@ -26,10 +26,14 @@ export class WebSocketConnectionService {
   private reconnectTimer: NodeJS.Timeout | null = null;
   private isReconnecting = false;
   private fillsReceived = 0;
+  private lastPongReceived: number | null = null;
+  private healthCheckTimer: NodeJS.Timeout | null = null;
   private readonly connectionId: number;
   private readonly fillQueue: FillQueueService;
   private readonly telegramService: TelegramService | null;
   private readonly MAX_RECONNECT_ATTEMPTS = 10;
+  private readonly PING_INTERVAL = 15000; // 15 seconds
+  private readonly PONG_TIMEOUT = 45000; // 45 seconds
 
   constructor(
     connectionId: number,
@@ -55,8 +59,22 @@ export class WebSocketConnectionService {
         ? 'wss://api.hyperliquid-testnet.xyz/ws'
         : 'wss://api.hyperliquid.xyz/ws';
 
-      this.wsTransport = new WebSocketTransport({ url: wsUrl });
+      this.wsTransport = new WebSocketTransport({
+        url: wsUrl,
+        keepAlive: {
+          interval: this.PING_INTERVAL // Send ping every 15 seconds
+        }
+      });
       this.eventClient = new EventClient({ transport: this.wsTransport });
+
+      // Attach pong listener for connection health monitoring
+      try {
+        this.wsTransport.socket.addEventListener('pong', () => {
+          this.lastPongReceived = Date.now();
+        });
+      } catch (error) {
+        console.warn(`Connection ${this.connectionId}: Could not attach pong listener:`, error);
+      }
 
       const connectionTimeout = new Promise<never>((_, reject) => {
         setTimeout(() => reject(new Error('WebSocket connection timeout after 30 seconds')), 30000);
@@ -73,6 +91,7 @@ export class WebSocketConnectionService {
       ]);
 
       this.lastConnectedAt = Date.now();
+      this.lastPongReceived = Date.now(); // Initialize with connection time
       this.reconnectAttempts = 0;
       this.isReconnecting = false;
 
@@ -80,6 +99,9 @@ export class WebSocketConnectionService {
         clearTimeout(this.reconnectTimer);
         this.reconnectTimer = null;
       }
+
+      // Start health monitoring based on pong responses
+      this.startHealthMonitor();
 
       console.log(`✓ Connection ${this.connectionId}: WebSocket subscription initialized for ${trackedWallet}`);
     } catch (error) {
@@ -188,6 +210,38 @@ export class WebSocketConnectionService {
     await this.initialize(savedWallet);
   }
 
+  private startHealthMonitor(): void {
+    // Clear any existing health check timer
+    if (this.healthCheckTimer) {
+      clearInterval(this.healthCheckTimer);
+    }
+
+    // Check connection health every 15 seconds
+    this.healthCheckTimer = setInterval(() => {
+      const now = Date.now();
+      const timeSincePong = now - (this.lastPongReceived || this.lastConnectedAt || now);
+
+      // If no pong for PONG_TIMEOUT (45s), connection is likely dead
+      if (timeSincePong > this.PONG_TIMEOUT) {
+        console.warn(
+          `⚠️  Connection ${this.connectionId}: No pong for ${Math.floor(timeSincePong / 1000)}s ` +
+          `(threshold: ${this.PONG_TIMEOUT / 1000}s), connection may be stale. Forcing reconnect...`
+        );
+
+        // Clear the health timer before reconnecting
+        if (this.healthCheckTimer) {
+          clearInterval(this.healthCheckTimer);
+          this.healthCheckTimer = null;
+        }
+
+        // Force reconnect
+        this.forceReconnect().catch(error => {
+          console.error(`Connection ${this.connectionId}: Failed to force reconnect:`, error.message);
+        });
+      }
+    }, 15000); // Check every 15 seconds
+  }
+
   isConnected(): boolean {
     return this.eventClient !== null && this.subscription !== null;
   }
@@ -208,6 +262,11 @@ export class WebSocketConnectionService {
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
+    }
+
+    if (this.healthCheckTimer) {
+      clearInterval(this.healthCheckTimer);
+      this.healthCheckTimer = null;
     }
 
     if (this.subscription) {
