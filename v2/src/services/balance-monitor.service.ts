@@ -68,6 +68,7 @@ export class BalanceMonitorService {
       }
 
       this.loggerService.logSnapshot(snapshot)
+      this.telegramService.updateSnapshot(snapshot)
 
       console.log(`\n📊 Balance Check | Tracked: $${trackedValue.toFixed(2)} (${trackedPositions.length} pos) | User: $${userValue.toFixed(2)} (${userPositions.length} pos) | Ratio: ${balanceRatio.toFixed(4)}`)
 
