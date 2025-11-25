@@ -46,6 +46,41 @@ app.get('/api/snapshots', (req: Request, res: Response) => {
   }
 })
 
+app.get('/api/user-snapshots', (req: Request, res: Response) => {
+  try {
+    const dateParam = req.query.date as string
+    const targetDate = dateParam || new Date().toISOString().split('T')[0]
+    const filePath = path.join(DATA_DIR, `snapshots-${targetDate}.jsonl`)
+
+    if (!fs.existsSync(filePath)) {
+      return res.json({ snapshots: [], count: 0, date: targetDate })
+    }
+
+    const content = fs.readFileSync(filePath, 'utf-8')
+    const snapshots = content
+      .trim()
+      .split('\n')
+      .filter(line => line)
+      .map(line => {
+        const snapshot = JSON.parse(line)
+        if (snapshot.user) {
+          return {
+            timestamp: snapshot.timestamp,
+            date: snapshot.date,
+            wallet: snapshot.user
+          }
+        }
+        return null
+      })
+      .filter(s => s !== null)
+      .sort((a, b) => a.timestamp - b.timestamp)
+
+    res.json({ snapshots, count: snapshots.length, date: targetDate })
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to read user snapshots' })
+  }
+})
+
 app.get('/api/trades', (req: Request, res: Response) => {
   try {
     const dateParam = req.query.date as string
