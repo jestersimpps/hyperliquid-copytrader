@@ -728,6 +728,7 @@
           },
           plugins: {
             legend: {
+              position: 'bottom',
               labels: {
                 color: '#e1e8ed',
                 font: { size: 12 }
@@ -850,7 +851,7 @@
       const riskCtx = document.getElementById('risk-metrics-chart').getContext('2d');
       chartInstances['risk-metrics-chart'] = new Chart(riskCtx, {
         ...getChartConfig('line', {
-          legend: { position: 'top', align: 'start' },
+          legend: { position: 'bottom' },
           y2Scale: { title: { display: true, text: 'Leverage', color: '#8899a6' } }
         }),
         data: {
@@ -910,7 +911,7 @@
       const ctx = document.getElementById('position-sizes-chart').getContext('2d');
       chartInstances['position-sizes-chart'] = new Chart(ctx, {
         ...getChartConfig('line', {
-          legend: { position: 'right' },
+          legend: { position: 'bottom' },
           yScale: { title: { display: true, text: 'Notional Value ($)', color: '#8899a6' } }
         }),
         data: { datasets }
@@ -946,7 +947,7 @@
       const ctx = document.getElementById('position-pnl-chart').getContext('2d');
       chartInstances['position-pnl-chart'] = new Chart(ctx, {
         ...getChartConfig('line', {
-          legend: { position: 'right' },
+          legend: { position: 'bottom' },
           yScale: { title: { display: true, text: 'Unrealized PNL ($)', color: '#8899a6' } }
         }),
         data: { datasets }
@@ -1072,7 +1073,7 @@
       const ctx = document.getElementById('realized-pnl-chart').getContext('2d');
       chartInstances['realized-pnl-chart'] = new Chart(ctx, {
         ...getChartConfig('line', {
-          legend: { position: 'top', align: 'start' },
+          legend: { position: 'bottom' },
           yScale: {
             title: { display: true, text: 'Cumulative Realized PNL ($)', color: '#8899a6' },
             ticks: {
