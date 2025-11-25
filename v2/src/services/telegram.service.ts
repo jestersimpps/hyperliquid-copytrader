@@ -3,6 +3,7 @@ import { DriftReport, Position } from '@/models'
 import { config } from '@/config'
 import { MonitorSnapshot } from './balance-monitor.service'
 import { HyperliquidService } from './hyperliquid.service'
+import { LoggerService } from './logger.service'
 
 export class TelegramService {
   private bot: TelegramBot | null = null
@@ -12,6 +13,7 @@ export class TelegramService {
   private startTime: number = Date.now()
   private tradingPaused: boolean = false
   private hyperliquidService: HyperliquidService | null = null
+  private loggerService: LoggerService | null = null
 
   constructor() {
     if (config.telegramBotToken && config.telegramChatId) {
@@ -26,6 +28,10 @@ export class TelegramService {
 
   setHyperliquidService(service: HyperliquidService): void {
     this.hyperliquidService = service
+  }
+
+  setLoggerService(service: LoggerService): void {
+    this.loggerService = service
   }
 
   isTradingPaused(): boolean {
@@ -166,6 +172,7 @@ export class TelegramService {
 
     try {
       const closeSize = Math.abs(position.size) * (percent / 100)
+      const startTime = Date.now()
       await this.sendMessage(`🔄 Closing ${percent}% of ${coin}...`)
 
       if (percent === 100) {
@@ -173,6 +180,21 @@ export class TelegramService {
       } else {
         await this.hyperliquidService.reducePosition(coin, closeSize, position.markPrice)
       }
+
+      const executionMs = Date.now() - startTime
+
+      this.loggerService?.logTrade({
+        coin,
+        action: percent === 100 ? 'close' : 'reduce',
+        side: position.side,
+        size: closeSize,
+        price: position.markPrice,
+        timestamp: Date.now(),
+        executionMs,
+        connectionId: -1,
+        realizedPnl: position.unrealizedPnl * (percent / 100),
+        source: 'telegram'
+      })
 
       await this.sendMessage(`✅ Closed ${percent}% of ${coin}`)
     } catch (error) {

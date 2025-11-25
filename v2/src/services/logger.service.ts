@@ -16,6 +16,7 @@ export interface TradeLogEntry {
   realizedPnl?: number
   fee?: string
   orderId?: number
+  source?: string
 }
 
 export class LoggerService {
@@ -71,7 +72,8 @@ export class LoggerService {
       orderId: entry.orderId || 0,
       realizedPnl: entry.realizedPnl || 0,
       fee: entry.fee || '0',
-      executionMs: entry.executionMs
+      executionMs: entry.executionMs,
+      source: entry.source || 'auto'
     }))
   }
 

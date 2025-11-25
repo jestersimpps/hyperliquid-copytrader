@@ -29,6 +29,7 @@ async function main(): Promise<void> {
   const telegramService = new TelegramService()
   telegramService.setHyperliquidService(hyperliquidService)
   const loggerService = new LoggerService()
+  telegramService.setLoggerService(loggerService)
   const riskMonitor = new RiskMonitorService(telegramService)
   const fillQueue = new FillQueueService()
   fillQueue.setRiskMonitor(riskMonitor)
