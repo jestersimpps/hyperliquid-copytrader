@@ -209,9 +209,8 @@ export class TelegramService {
     let entryDiffStr = 'N/A'
 
     if (trackedPos) {
-      const trackedValue = parseFloat(snapshot.trackedBalance.accountValue)
-      const expectedSize = (trackedPos.notionalValue / trackedValue) * userValue
-      const sizeDiff = ((pos.notionalValue - expectedSize) / expectedSize) * 100
+      const scaledTargetSize = trackedPos.size * snapshot.balanceRatio
+      const sizeDiff = ((pos.size - scaledTargetSize) / scaledTargetSize) * 100
       const sizeDiffSign = sizeDiff >= 0 ? '+' : ''
       sizeDiffStr = `${sizeDiffSign}${sizeDiff.toFixed(1)}%`
 
