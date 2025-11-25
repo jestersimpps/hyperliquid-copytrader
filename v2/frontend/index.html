@@ -349,10 +349,56 @@
     }
     .no-positions { text-align: center; color: #8899a6; padding: 30px; }
 
+    .positions-container { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+    @media (max-width: 768px) {
+      .positions-table { display: none; }
+      .positions-cards { display: block; }
+    }
+    @media (min-width: 769px) {
+      .positions-cards { display: none; }
+    }
+
+    .positions-cards { display: none; }
+    .position-card {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 15px;
+      margin-bottom: 10px;
+    }
+    .position-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .position-card-coin {
+      font-size: 1.1em;
+      font-weight: bold;
+    }
+    .position-card-pnl {
+      font-size: 1em;
+      font-weight: bold;
+    }
+    .position-card-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 6px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      font-size: 0.9em;
+    }
+    .position-card-row:last-child { border-bottom: none; }
+    .position-card-label { color: #8899a6; }
+    .position-card-value { color: #e1e8ed; }
+
     @media (max-width: 480px) {
       .daily-cards-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
       .daily-card { padding: 10px; min-height: 100px; }
       .daily-card-pnl { font-size: 1em; }
+      .stats-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+      .stat-card { padding: 15px; }
+      .stat-value { font-size: 1.2rem; }
     }
     @media (min-width: 481px) and (max-width: 768px) {
       .daily-cards-grid { grid-template-columns: repeat(3, 1fr); gap: 10px; }
@@ -1051,7 +1097,7 @@
         return;
       }
 
-      let html = `
+      let tableHtml = `
         <table class="positions-table">
           <thead>
             <tr>
@@ -1066,38 +1112,68 @@
           <tbody>
       `;
 
+      let cardsHtml = '<div class="positions-cards">';
+
       for (const pos of userPositions) {
         const isLong = pos.size > 0;
         const direction = isLong ? 'LONG' : 'SHORT';
         const directionClass = isLong ? 'direction-long' : 'direction-short';
         const pnl = pos.unrealizedPnl || 0;
         const pnlClass = pnl >= 0 ? 'positive' : 'negative';
+        const pnlSign = pnl >= 0 ? '+' : '';
         const trackedPos = trackedByCoins[pos.coin];
         const trackedEntry = trackedPos ? trackedPos.entryPrice : null;
+        const sizeFormatted = '$' + Math.abs(pos.notionalValue || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        const entryFormatted = '$' + (pos.entryPrice || 0).toLocaleString(undefined, {minimumFractionDigits: 4, maximumFractionDigits: 4});
+        const trackedEntryFormatted = trackedEntry ? '$' + trackedEntry.toLocaleString(undefined, {minimumFractionDigits: 4, maximumFractionDigits: 4}) : '-';
 
         let entryDiffHtml = '';
+        let entryDiffText = '';
         if (trackedEntry && pos.entryPrice) {
           const diffPct = ((pos.entryPrice - trackedEntry) / trackedEntry) * 100;
           const isFavorable = isLong ? diffPct < 0 : diffPct > 0;
           const diffClass = isFavorable ? 'positive' : 'negative';
           const diffSign = diffPct >= 0 ? '+' : '';
           entryDiffHtml = `<span class="${diffClass}" style="margin-left: 8px; font-size: 0.85em;">(${diffSign}${diffPct.toFixed(2)}%)</span>`;
+          entryDiffText = `<span class="${diffClass}">(${diffSign}${diffPct.toFixed(2)}%)</span>`;
         }
 
-        html += `
+        tableHtml += `
           <tr>
             <td>${pos.coin}</td>
             <td><span class="${directionClass}">${direction}</span></td>
-            <td>$${Math.abs(pos.notionalValue || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
-            <td>$${(pos.entryPrice || 0).toLocaleString(undefined, {minimumFractionDigits: 4, maximumFractionDigits: 4})}${entryDiffHtml}</td>
-            <td>${trackedEntry ? '$' + trackedEntry.toLocaleString(undefined, {minimumFractionDigits: 4, maximumFractionDigits: 4}) : '-'}</td>
-            <td class="${pnlClass}">$${pnl.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+            <td>${sizeFormatted}</td>
+            <td>${entryFormatted}${entryDiffHtml}</td>
+            <td>${trackedEntryFormatted}</td>
+            <td class="${pnlClass}">${pnlSign}$${Math.abs(pnl).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
           </tr>
+        `;
+
+        cardsHtml += `
+          <div class="position-card">
+            <div class="position-card-header">
+              <span class="position-card-coin">${pos.coin} <span class="${directionClass}">${direction}</span></span>
+              <span class="position-card-pnl ${pnlClass}">${pnlSign}$${Math.abs(pnl).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+            </div>
+            <div class="position-card-row">
+              <span class="position-card-label">Size</span>
+              <span class="position-card-value">${sizeFormatted}</span>
+            </div>
+            <div class="position-card-row">
+              <span class="position-card-label">Entry</span>
+              <span class="position-card-value">${entryFormatted} ${entryDiffText}</span>
+            </div>
+            <div class="position-card-row">
+              <span class="position-card-label">Tracked Entry</span>
+              <span class="position-card-value">${trackedEntryFormatted}</span>
+            </div>
+          </div>
         `;
       }
 
-      html += '</tbody></table>';
-      container.innerHTML = html;
+      tableHtml += '</tbody></table>';
+      cardsHtml += '</div>';
+      container.innerHTML = tableHtml + cardsHtml;
     }
 
     function showError(message) {
