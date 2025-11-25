@@ -4,7 +4,7 @@ module.exports = {
       name: 'copyscalper-v2',
       script: 'npm',
       args: 'start',
-      cwd: '/Users/jovinkenroye/Sites/copyscalper/v2',
+      cwd: '.',
       instances: 1,
       autorestart: true,
       watch: false,
