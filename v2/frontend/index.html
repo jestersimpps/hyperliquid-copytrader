@@ -436,6 +436,11 @@
     </div>
 
     <div class="chart-container">
+      <div class="chart-title">Realized PnL by Symbol</div>
+      <canvas id="realized-pnl-chart"></canvas>
+    </div>
+
+    <div class="chart-container">
       <div class="chart-title">Entry Price Difference % (User vs Tracked)</div>
       <canvas id="entry-diff-chart"></canvas>
     </div>
@@ -575,6 +580,7 @@
       renderBalanceChart();
       renderPnlChart();
       renderPositionSizeCharts();
+      renderRealizedPnlChart();
       renderEntryDiffChart();
       renderDrawdownChart();
       renderRiskChart();
@@ -730,6 +736,81 @@
           yScale: {
             title: { display: true, text: '% of Balance', color: '#8899a6' },
             ticks: { color: '#8899a6', font: { size: 11 }, callback: v => v.toFixed(1) + '%' }
+          }
+        }),
+        data: { datasets }
+      });
+    }
+
+    function renderRealizedPnlChart() {
+      const realizedPnlBySymbol = {};
+      let prevPositions = {};
+
+      filteredSnapshots.forEach((snapshot, idx) => {
+        const timestamp = new Date(snapshot.timestamp);
+        const currentPositions = {};
+
+        (snapshot.user.positions || []).forEach(pos => {
+          currentPositions[pos.coin] = {
+            unrealizedPnl: pos.unrealizedPnl || 0,
+            side: pos.side
+          };
+        });
+
+        if (idx > 0) {
+          Object.keys(prevPositions).forEach(coin => {
+            if (!currentPositions[coin]) {
+              const realizedPnl = prevPositions[coin].unrealizedPnl;
+              if (!realizedPnlBySymbol[coin]) {
+                realizedPnlBySymbol[coin] = { x: [], y: [], cumulative: 0 };
+              }
+              realizedPnlBySymbol[coin].cumulative += realizedPnl;
+              realizedPnlBySymbol[coin].x.push(timestamp);
+              realizedPnlBySymbol[coin].y.push(realizedPnlBySymbol[coin].cumulative);
+            }
+          });
+        }
+
+        prevPositions = currentPositions;
+      });
+
+      const datasets = Object.entries(realizedPnlBySymbol).map(([coin, data]) => ({
+        label: coin,
+        data: data.x.map((x, i) => ({ x, y: data.y[i] })),
+        borderColor: getSymbolColor(coin),
+        backgroundColor: getSymbolColor(coin) + '40',
+        borderWidth: 2,
+        tension: 0.1,
+        fill: false,
+        pointRadius: 3,
+        stepped: 'after'
+      }));
+
+      if (chartInstances['realized-pnl-chart']) chartInstances['realized-pnl-chart'].destroy();
+
+      if (datasets.length === 0) {
+        const ctx = document.getElementById('realized-pnl-chart').getContext('2d');
+        chartInstances['realized-pnl-chart'] = new Chart(ctx, {
+          type: 'line',
+          data: { datasets: [] },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { display: false },
+              title: { display: true, text: 'No closed positions yet', color: '#8899a6' }
+            }
+          }
+        });
+        return;
+      }
+
+      chartInstances['realized-pnl-chart'] = new Chart(document.getElementById('realized-pnl-chart').getContext('2d'), {
+        ...getChartConfig('line', {
+          legend: { position: 'right' },
+          yScale: {
+            title: { display: true, text: 'Cumulative Realized PnL ($)', color: '#8899a6' },
+            ticks: { color: '#8899a6', font: { size: 11 }, callback: v => '$' + v.toFixed(2) }
           }
         }),
         data: { datasets }
