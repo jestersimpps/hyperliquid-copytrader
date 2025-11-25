@@ -72,7 +72,7 @@ export class TelegramService {
       ? `${Math.floor(uptimeMinutes / 60)}h ${uptimeMinutes % 60}m`
       : `${uptimeMinutes}m`
 
-    const userValue = parseFloat(s.userBalance.withdrawable)
+    const userValue = parseFloat(s.userBalance.accountValue)
 
     let message = '📊 *Status*\n\n'
     message += `💰 Balance: $${userValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}\n\n`
