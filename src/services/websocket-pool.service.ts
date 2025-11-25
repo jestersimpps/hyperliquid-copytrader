@@ -102,18 +102,30 @@ export class WebSocketPoolService {
 
   private checkInactivity(): void {
     const now = Date.now();
-    const inactivityThreshold = 5 * 60 * 1000;
+
+    // Staggered thresholds to prevent simultaneous reconnects
+    // Connection 1: 1 min (fast detection)
+    // Connection 2: 3.5 min (medium detection, offset from 1 and 3)
+    // Connection 3: 5 min (conservative detection)
+    const thresholds = [
+      1 * 60 * 1000,      // Connection 1: 1 minute
+      3.5 * 60 * 1000,    // Connection 2: 3 minutes 30 seconds
+      5 * 60 * 1000       // Connection 3: 5 minutes
+    ];
 
     for (const connection of this.connections) {
       const stats = connection.getConnectionStats();
 
       if (!stats.isConnected) continue;
 
+      const threshold = thresholds[stats.id - 1] || 5 * 60 * 1000;
+
       if (stats.lastFillReceivedAt) {
         const timeSinceLastFill = now - stats.lastFillReceivedAt;
 
-        if (timeSinceLastFill > inactivityThreshold) {
-          console.warn(`⚠️  Connection ${stats.id} inactive for ${Math.floor(timeSinceLastFill / 1000)}s, forcing reconnect...`);
+        if (timeSinceLastFill > threshold) {
+          const thresholdMinutes = threshold / 60000;
+          console.warn(`⚠️  Connection ${stats.id} inactive for ${Math.floor(timeSinceLastFill / 1000)}s (threshold: ${thresholdMinutes}m), forcing reconnect...`);
           connection.forceReconnect().catch(error => {
             console.error(`Failed to force reconnect connection ${stats.id}:`, error.message);
           });
