@@ -115,6 +115,13 @@ export class WebSocketPoolService {
       307 * 1000          // Connection 3: 307 seconds (5m 7s)
     ];
 
+    // Staggered delays to ensure reconnections happen at least 10s apart
+    const reconnectDelays = [
+      0,                  // Connection 1: immediate
+      10 * 1000,          // Connection 2: 10s delay
+      20 * 1000           // Connection 3: 20s delay
+    ];
+
     for (const connection of this.connections) {
       const stats = connection.getConnectionStats();
 
@@ -127,10 +134,21 @@ export class WebSocketPoolService {
 
         if (timeSinceLastFill > threshold) {
           const thresholdMinutes = threshold / 60000;
-          console.warn(`⚠️  Connection ${stats.id} inactive for ${Math.floor(timeSinceLastFill / 1000)}s (threshold: ${thresholdMinutes}m), forcing reconnect...`);
-          connection.forceReconnect().catch(error => {
-            console.error(`Failed to force reconnect connection ${stats.id}:`, error.message);
-          });
+          const delay = reconnectDelays[stats.id - 1] || 0;
+
+          if (delay > 0) {
+            console.warn(`⚠️  Connection ${stats.id} inactive for ${Math.floor(timeSinceLastFill / 1000)}s (threshold: ${thresholdMinutes}m), scheduling reconnect in ${delay / 1000}s...`);
+            setTimeout(() => {
+              connection.forceReconnect().catch(error => {
+                console.error(`Failed to force reconnect connection ${stats.id}:`, error.message);
+              });
+            }, delay);
+          } else {
+            console.warn(`⚠️  Connection ${stats.id} inactive for ${Math.floor(timeSinceLastFill / 1000)}s (threshold: ${thresholdMinutes}m), forcing reconnect...`);
+            connection.forceReconnect().catch(error => {
+              console.error(`Failed to force reconnect connection ${stats.id}:`, error.message);
+            });
+          }
         }
       }
     }
