@@ -136,10 +136,10 @@ export class TelegramService {
 
       for (const pos of this.lastSnapshot.userPositions) {
         const pnlSign = pos.unrealizedPnl >= 0 ? '+' : ''
-        message += `\n\n*${pos.coin}* ${pos.side.toUpperCase()} ${pnlSign}$${pos.unrealizedPnl.toFixed(2)}`
+        const label = `${pos.coin} ${pnlSign}$${pos.unrealizedPnl.toFixed(0)}`
 
         keyboard.push([
-          { text: '100%', callback_data: `close_${pos.coin}_100` },
+          { text: `${label} 100%`, callback_data: `close_${pos.coin}_100` },
           { text: '50%', callback_data: `close_${pos.coin}_50` },
           { text: '25%', callback_data: `close_${pos.coin}_25` }
         ])
