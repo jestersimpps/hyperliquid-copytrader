@@ -41,25 +41,39 @@ app.get('/api/snapshots', (req: Request, res: Response) => {
         const snapshot = JSON.parse(line)
 
         if (snapshot.user?.positions) {
-          snapshot.user.totalUnrealizedPnl = snapshot.user.positions.reduce(
+          const userPositions = snapshot.user.positions
+          snapshot.user.totalUnrealizedPnl = userPositions.reduce(
             (sum: number, p: { unrealizedPnl?: number }) => sum + (p.unrealizedPnl || 0),
             0
           )
-          snapshot.user.totalMarginUsed = snapshot.user.positions.reduce(
+          snapshot.user.totalMarginUsed = userPositions.reduce(
             (sum: number, p: { marginUsed?: number }) => sum + (p.marginUsed || 0),
             0
           )
+          snapshot.user.averageLeverage = userPositions.length > 0
+            ? userPositions.reduce((sum: number, p: { leverage?: number }) => sum + (p.leverage || 0), 0) / userPositions.length
+            : 0
+          snapshot.user.crossMarginRatio = snapshot.user.accountValue > 0
+            ? (snapshot.user.totalMarginUsed / snapshot.user.accountValue) * 100
+            : 0
         }
 
         if (snapshot.tracked?.positions) {
-          snapshot.tracked.totalUnrealizedPnl = snapshot.tracked.positions.reduce(
+          const trackedPositions = snapshot.tracked.positions
+          snapshot.tracked.totalUnrealizedPnl = trackedPositions.reduce(
             (sum: number, p: { unrealizedPnl?: number }) => sum + (p.unrealizedPnl || 0),
             0
           )
-          snapshot.tracked.totalMarginUsed = snapshot.tracked.positions.reduce(
+          snapshot.tracked.totalMarginUsed = trackedPositions.reduce(
             (sum: number, p: { marginUsed?: number }) => sum + (p.marginUsed || 0),
             0
           )
+          snapshot.tracked.averageLeverage = trackedPositions.length > 0
+            ? trackedPositions.reduce((sum: number, p: { leverage?: number }) => sum + (p.leverage || 0), 0) / trackedPositions.length
+            : 0
+          snapshot.tracked.crossMarginRatio = snapshot.tracked.accountValue > 0
+            ? (snapshot.tracked.totalMarginUsed / snapshot.tracked.accountValue) * 100
+            : 0
         }
 
         return snapshot
