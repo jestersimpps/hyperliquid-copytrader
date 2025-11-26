@@ -37,6 +37,24 @@ export class DriftDetectorService {
           currentPrice: tracked.markPrice,
           sizeDiffPercent: 100
         })
+      } else if (userPos.side !== tracked.side) {
+        const isFavorable = this.checkOpenFavorability(
+          tracked.side,
+          tracked.markPrice,
+          tracked.entryPrice
+        )
+
+        drifts.push({
+          coin: tracked.coin,
+          trackedPosition: tracked,
+          userPosition: userPos,
+          driftType: 'side_mismatch',
+          isFavorable,
+          priceImprovement: this.calculatePriceImprovement(tracked),
+          scaledTargetSize,
+          currentPrice: tracked.markPrice,
+          sizeDiffPercent: 100
+        })
       } else {
         const sizeDiffPercent = Math.abs(userPos.size - scaledTargetSize) / scaledTargetSize * 100
 
@@ -91,9 +109,9 @@ export class DriftDetectorService {
     entryPrice: number
   ): boolean {
     if (side === 'long') {
-      return currentPrice <= entryPrice * (1 - config.minImprovement)
+      return currentPrice <= entryPrice
     } else {
-      return currentPrice >= entryPrice * (1 + config.minImprovement)
+      return currentPrice >= entryPrice
     }
   }
 

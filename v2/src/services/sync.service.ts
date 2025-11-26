@@ -117,6 +117,33 @@ export class SyncService {
       }
 
       console.log(`   ✓ Size adjusted ${coin}`)
+    } else if (drift.driftType === 'side_mismatch' && drift.trackedPosition && drift.userPosition) {
+      const { coin, side, markPrice } = drift.trackedPosition
+      const targetSize = drift.scaledTargetSize
+
+      console.log(`   🔄 Reversing ${coin} from ${drift.userPosition.side.toUpperCase()} to ${side.toUpperCase()}: ${targetSize.toFixed(4)} @ $${markPrice.toFixed(2)}`)
+
+      await this.hyperliquidService.closePosition(coin, markPrice)
+
+      if (side === 'long') {
+        await this.hyperliquidService.openLong(coin, targetSize, markPrice)
+      } else {
+        await this.hyperliquidService.openShort(coin, targetSize, markPrice)
+      }
+
+      this.loggerService.logTrade({
+        coin,
+        action: 'reverse',
+        side,
+        size: targetSize,
+        price: markPrice,
+        timestamp: Date.now(),
+        executionMs: Date.now() - startTime,
+        connectionId: 0,
+        syncReason: 'side_mismatch'
+      })
+
+      console.log(`   ✓ Reversed ${coin} to ${side.toUpperCase()}`)
     }
   }
 }

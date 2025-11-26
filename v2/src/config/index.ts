@@ -34,6 +34,5 @@ export const config: Config = {
   telegramBotToken: getEnvVar('TELEGRAM_BOT_TOKEN'),
   telegramChatId: getEnvVar('TELEGRAM_CHAT_ID'),
   minOrderValue: getEnvNumber('MIN_ORDER_VALUE', 11),
-  driftThresholdPercent: getEnvNumber('DRIFT_THRESHOLD_PERCENT', 1),
-  minImprovement: getEnvNumber('MIN_IMPROVEMENT', 1) / 100
+  driftThresholdPercent: getEnvNumber('DRIFT_THRESHOLD_PERCENT', 1)
 }

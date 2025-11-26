@@ -1,6 +1,6 @@
 import { Position } from './position.model'
 
-export type DriftType = 'missing' | 'extra' | 'size_mismatch'
+export type DriftType = 'missing' | 'extra' | 'size_mismatch' | 'side_mismatch'
 
 export interface PositionDrift {
   coin: string
