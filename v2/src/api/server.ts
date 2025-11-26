@@ -175,6 +175,30 @@ app.get('/api/trades', (req: Request, res: Response) => {
   }
 })
 
+app.get('/api/tracked-fills', (req: Request, res: Response) => {
+  try {
+    const dateParam = req.query.date as string
+    const targetDate = dateParam || new Date().toISOString().split('T')[0]
+    const filePath = path.join(DATA_DIR, `tracked-fills-${targetDate}.jsonl`)
+
+    if (!fs.existsSync(filePath)) {
+      return res.json({ fills: [], count: 0, date: targetDate })
+    }
+
+    const content = fs.readFileSync(filePath, 'utf-8')
+    const fills = content
+      .trim()
+      .split('\n')
+      .filter(line => line)
+      .map(line => JSON.parse(line))
+      .sort((a, b) => a.timestamp - b.timestamp)
+
+    res.json({ fills, count: fills.length, date: targetDate })
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to read tracked fills' })
+  }
+})
+
 app.get('/api/daily-summary', (req: Request, res: Response) => {
   try {
     const daysParam = req.query.days as string

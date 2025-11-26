@@ -23,6 +23,17 @@ export class FillProcessorService {
   }
 
   async processFill(fill: UserFillData, connectionId: number): Promise<void> {
+    const closedPnl = parseFloat(fill.closedPnl || '0')
+    this.loggerService.logTrackedFill({
+      coin: fill.coin,
+      side: fill.side,
+      size: parseFloat(fill.sz || '0'),
+      price: parseFloat(fill.px),
+      timestamp: fill.time,
+      closedPnl,
+      fee: parseFloat(fill.fee || '0')
+    })
+
     const action = this.determineAction(fill)
     if (!action) return
 

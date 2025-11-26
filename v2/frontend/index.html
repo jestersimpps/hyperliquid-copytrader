@@ -482,8 +482,13 @@
     </div>
 
     <div class="chart-container">
-      <div class="chart-title">Realized PnL by Symbol</div>
+      <div class="chart-title">User Realized PnL by Symbol</div>
       <canvas id="realized-pnl-chart"></canvas>
+    </div>
+
+    <div class="chart-container">
+      <div class="chart-title">Tracked Address Realized PnL by Symbol</div>
+      <canvas id="tracked-realized-pnl-chart"></canvas>
     </div>
 
     <div class="chart-container">
@@ -507,6 +512,7 @@
   <script>
     let filteredSnapshots = [];
     let allTrades = [];
+    let trackedFills = [];
     let dailySummaryData = [];
     let selectedDate = new Date().toISOString().split('T')[0];
 
@@ -571,14 +577,16 @@
     async function fetchSnapshots(date = null) {
       try {
         const targetDate = date || selectedDate;
-        const [snapshotsRes, tradesRes, summaryRes] = await Promise.all([
+        const [snapshotsRes, tradesRes, trackedFillsRes, summaryRes] = await Promise.all([
           fetch(`/api/snapshots?date=${targetDate}`),
           fetch(`/api/trades?date=${targetDate}`),
+          fetch(`/api/tracked-fills?date=${targetDate}`),
           fetch('/api/daily-summary?days=10')
         ]);
 
         const snapshotsData = await snapshotsRes.json();
         const tradesData = await tradesRes.json();
+        const trackedFillsData = await trackedFillsRes.json();
         const summaryData = await summaryRes.json();
 
         if (!snapshotsRes.ok) {
@@ -587,6 +595,7 @@
 
         filteredSnapshots = snapshotsData.snapshots;
         allTrades = tradesData.trades || [];
+        trackedFills = trackedFillsData.fills || [];
         dailySummaryData = summaryData.days || [];
 
         if (filteredSnapshots.length === 0) {
@@ -638,6 +647,7 @@
       renderPnlChart();
       renderPositionSizeCharts();
       renderRealizedPnlChart();
+      renderTrackedRealizedPnlChart();
       renderEntryDiffChart();
       renderDrawdownChart();
       renderRiskChart();
@@ -863,6 +873,75 @@
       }));
 
       chartInstances['realized-pnl-chart'] = new Chart(ctx, {
+        ...getChartConfig('line', {
+          legend: { position: 'bottom' },
+          yScale: {
+            title: { display: true, text: 'Cumulative Realized PNL ($)', color: '#8899a6' },
+            ticks: { color: '#8899a6', font: { size: 11 }, callback: v => '$' + v.toFixed(2) }
+          }
+        }),
+        data: { datasets }
+      });
+    }
+
+    function renderTrackedRealizedPnlChart() {
+      if (chartInstances['tracked-realized-pnl-chart']) chartInstances['tracked-realized-pnl-chart'].destroy();
+      const ctx = document.getElementById('tracked-realized-pnl-chart').getContext('2d');
+
+      if (trackedFills.length === 0) {
+        chartInstances['tracked-realized-pnl-chart'] = new Chart(ctx, {
+          type: 'line',
+          data: { datasets: [] },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false }, tooltip: { enabled: false } },
+            scales: { x: { display: false }, y: { display: false } }
+          },
+          plugins: [{
+            id: 'noDataMessage',
+            afterDraw: (chart) => {
+              const ctx = chart.ctx;
+              const width = chart.width;
+              const height = chart.height;
+              ctx.save();
+              ctx.textAlign = 'center';
+              ctx.textBaseline = 'middle';
+              ctx.font = '16px sans-serif';
+              ctx.fillStyle = '#657786';
+              ctx.fillText('No tracked fills', width / 2, height / 2);
+              ctx.restore();
+            }
+          }]
+        });
+        return;
+      }
+
+      const coinData = {};
+
+      trackedFills
+        .sort((a, b) => a.timestamp - b.timestamp)
+        .forEach(fill => {
+          if (!coinData[fill.coin]) {
+            coinData[fill.coin] = { x: [], y: [], cumulative: 0 };
+          }
+          coinData[fill.coin].cumulative += fill.closedPnl;
+          coinData[fill.coin].x.push(new Date(fill.timestamp));
+          coinData[fill.coin].y.push(coinData[fill.coin].cumulative);
+        });
+
+      const datasets = Object.entries(coinData).map(([coin, data]) => ({
+        label: coin,
+        data: data.x.map((x, i) => ({ x, y: data.y[i] })),
+        borderColor: getSymbolColor(coin),
+        backgroundColor: getSymbolColor(coin),
+        borderWidth: 2,
+        tension: 0.1,
+        fill: false,
+        pointRadius: 0
+      }));
+
+      chartInstances['tracked-realized-pnl-chart'] = new Chart(ctx, {
         ...getChartConfig('line', {
           legend: { position: 'bottom' },
           yScale: {

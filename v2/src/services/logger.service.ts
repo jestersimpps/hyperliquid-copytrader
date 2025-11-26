@@ -19,6 +19,16 @@ export interface TradeLogEntry {
   source?: string
 }
 
+export interface TrackedFillEntry {
+  coin: string
+  side: string
+  size: number
+  price: number
+  timestamp: number
+  closedPnl: number
+  fee: number
+}
+
 export class LoggerService {
   private readonly dataDir: string
 
@@ -74,6 +84,21 @@ export class LoggerService {
       fee: entry.fee || '0',
       executionMs: entry.executionMs,
       source: entry.source || 'auto'
+    }))
+  }
+
+  logTrackedFill(entry: TrackedFillEntry): void {
+    const date = new Date(entry.timestamp).toISOString().split('T')[0]
+    const filePath = path.join(this.dataDir, `tracked-fills-${date}.jsonl`)
+    this.appendLine(filePath, JSON.stringify({
+      timestamp: entry.timestamp,
+      date: new Date(entry.timestamp).toISOString(),
+      coin: entry.coin,
+      side: entry.side,
+      size: entry.size,
+      price: entry.price,
+      closedPnl: entry.closedPnl,
+      fee: entry.fee
     }))
   }
 
