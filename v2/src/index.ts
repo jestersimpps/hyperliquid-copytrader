@@ -35,6 +35,7 @@ async function main(): Promise<void> {
   fillQueue.setRiskMonitor(riskMonitor)
   const fillProcessor = new FillProcessorService(hyperliquidService, loggerService, telegramService)
   const webSocketPool = new WebSocketPoolService(fillQueue)
+  fillQueue.setWebSocketPool(webSocketPool)
   const driftDetector = new DriftDetectorService()
   const syncService = new SyncService(
     hyperliquidService,

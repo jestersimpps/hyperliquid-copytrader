@@ -29,8 +29,6 @@ export class SyncService {
         console.error(`   ✗ Failed to sync ${drift.coin}:`, error instanceof Error ? error.message : error)
       }
     }
-
-    this.webSocketPool.restartAllStaggered()
   }
 
   private async executeSyncTrade(drift: PositionDrift): Promise<void> {

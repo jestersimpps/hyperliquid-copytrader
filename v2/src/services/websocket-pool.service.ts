@@ -53,18 +53,35 @@ export class WebSocketPoolService {
     await this.connections[index].forceReconnect()
   }
 
-  async restartAllStaggered(): Promise<void> {
-    console.log('⟳ Staggered restart of all connections (1 min apart)...')
-    const delays = [0, 60000, 120000]
+  private pendingFillChecks: Map<string, { receivedBy: Set<number>; timestamp: number }> = new Map()
 
-    for (let i = 0; i < this.POOL_SIZE; i++) {
-      setTimeout(async () => {
-        try {
-          await this.connections[i].forceReconnect()
-        } catch (error) {
-          console.error(`Failed to restart connection ${i + 1}:`, error instanceof Error ? error.message : error)
-        }
-      }, delays[i])
+  trackFillReception(tid: string, connectionId: number): void {
+    if (!this.pendingFillChecks.has(tid)) {
+      this.pendingFillChecks.set(tid, {
+        receivedBy: new Set([connectionId]),
+        timestamp: Date.now()
+      })
+      setTimeout(() => this.checkMissedFill(tid), 5000)
+    } else {
+      this.pendingFillChecks.get(tid)!.receivedBy.add(connectionId)
+    }
+  }
+
+  private checkMissedFill(tid: string): void {
+    const fillData = this.pendingFillChecks.get(tid)
+    if (!fillData) return
+
+    this.pendingFillChecks.delete(tid)
+
+    for (const conn of this.connections) {
+      const stats = conn.getStats()
+      if (!stats.isConnected) continue
+      if (fillData.receivedBy.has(stats.id)) continue
+
+      console.log(`⟳ Connection ${stats.id} missed TID ${tid}, reconnecting...`)
+      conn.forceReconnect().catch(err =>
+        console.error(`Failed to reconnect ${stats.id}:`, err instanceof Error ? err.message : err)
+      )
     }
   }
 
