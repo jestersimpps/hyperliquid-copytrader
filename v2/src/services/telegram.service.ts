@@ -12,6 +12,7 @@ export class TelegramService {
   private lastSnapshot: MonitorSnapshot | null = null
   private startTime: number = Date.now()
   private tradingPaused: boolean = false
+  private hrefModeEnabled: boolean = false
   private hyperliquidService: HyperliquidService | null = null
   private loggerService: LoggerService | null = null
   private lastDriftAlertTime: number = 0
@@ -38,6 +39,10 @@ export class TelegramService {
 
   isTradingPaused(): boolean {
     return this.tradingPaused
+  }
+
+  isHrefModeEnabled(): boolean {
+    return this.hrefModeEnabled
   }
 
   private setupErrorHandlers(): void {
@@ -120,6 +125,16 @@ export class TelegramService {
         case 'status':
           await this.sendStatus()
           break
+
+        case 'enable_href_mode':
+          this.hrefModeEnabled = true
+          await this.sendMessage('🔗 HREF mode *enabled* - using balance sync only')
+          break
+
+        case 'disable_href_mode':
+          this.hrefModeEnabled = false
+          await this.sendMessage('⚡ HREF mode *disabled* - websocket fills active')
+          break
       }
     })
   }
@@ -131,8 +146,13 @@ export class TelegramService {
       ? { text: '▶️ Resume Trading', callback_data: 'resume_trading' }
       : { text: '⏸️ Pause Trading', callback_data: 'pause_trading' }
 
+    const hrefButton = this.hrefModeEnabled
+      ? { text: '⚡ Disable HREF Mode', callback_data: 'disable_href_mode' }
+      : { text: '🔗 Enable HREF Mode', callback_data: 'enable_href_mode' }
+
     const keyboard: TelegramBot.InlineKeyboardButton[][] = [
       [tradingButton],
+      [hrefButton],
       [{ text: '📊 Status', callback_data: 'status' }],
       [{ text: '🔄 Restart Bot', callback_data: 'restart_bot' }]
     ]

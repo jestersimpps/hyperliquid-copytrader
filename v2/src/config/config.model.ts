@@ -7,4 +7,5 @@ export interface Config {
   telegramChatId: string | null
   minOrderValue: number
   driftThresholdPercent: number
+  minImprovement: number
 }

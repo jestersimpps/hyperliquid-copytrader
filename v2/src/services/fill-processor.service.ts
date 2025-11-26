@@ -39,6 +39,11 @@ export class FillProcessorService {
       return
     }
 
+    if (this.telegramService.isHrefModeEnabled()) {
+      console.log('   🔗 HREF mode active, skipping websocket fill')
+      return
+    }
+
     const startTime = Date.now()
 
     try {
