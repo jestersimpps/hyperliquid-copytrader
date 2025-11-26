@@ -14,6 +14,8 @@ export class TelegramService {
   private tradingPaused: boolean = false
   private hyperliquidService: HyperliquidService | null = null
   private loggerService: LoggerService | null = null
+  private lastDriftAlertTime: number = 0
+  private readonly DRIFT_ALERT_COOLDOWN_MS = 60 * 60 * 1000
 
   constructor() {
     if (config.telegramBotToken && config.telegramChatId) {
@@ -275,6 +277,12 @@ export class TelegramService {
 
   async sendDriftAlert(driftReport: DriftReport): Promise<void> {
     if (!this.enabled) return
+
+    const now = Date.now()
+    if (now - this.lastDriftAlertTime < this.DRIFT_ALERT_COOLDOWN_MS) {
+      return
+    }
+    this.lastDriftAlertTime = now
 
     let message = `⚠️ *Position Drift Detected*\n\n`
     message += `Found ${driftReport.drifts.length} drift(s):\n\n`
