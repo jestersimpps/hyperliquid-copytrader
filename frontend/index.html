@@ -615,18 +615,33 @@
       .charts-row { grid-template-columns: 1fr; }
     }
 
+    .summary-top-row {
+      display: grid;
+      grid-template-columns: 1fr 3fr;
+      gap: 20px;
+      margin-bottom: 30px;
+    }
+
     .total-summary {
       background: linear-gradient(135deg, rgba(0, 212, 255, 0.1) 0%, rgba(102, 126, 234, 0.08) 100%);
       border: 1px solid rgba(0, 212, 255, 0.2);
       border-radius: 16px;
       padding: 25px;
-      margin-bottom: 30px;
       text-align: center;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
     }
 
     .total-summary-label { font-size: 0.9em; color: #8899a6; margin-bottom: 8px; text-transform: uppercase; }
-    .total-summary-value { font-size: 2.5em; font-weight: bold; color: #e1e8ed; }
-    .total-summary-sub { font-size: 1em; color: #8899a6; margin-top: 8px; }
+    .total-summary-value { font-size: 2.2em; font-weight: bold; color: #e1e8ed; }
+    .total-summary-sub { font-size: 0.95em; color: #8899a6; margin-top: 8px; }
+
+    @media (max-width: 1024px) {
+      .summary-top-row {
+        grid-template-columns: 1fr;
+      }
+    }
   </style>
 </head>
 <body>
@@ -641,15 +656,17 @@
     <div class="account-tabs" id="account-tabs"></div>
 
     <div id="summary-view" style="display: none;">
-      <div class="total-summary">
-        <div class="total-summary-label">Total Balance (All Accounts)</div>
-        <div class="total-summary-value" id="total-balance">$0</div>
-        <div class="total-summary-sub" id="total-positions">0 positions across 0 accounts</div>
-      </div>
+      <div class="summary-top-row">
+        <div class="total-summary">
+          <div class="total-summary-label">Total Balance (All Accounts)</div>
+          <div class="total-summary-value" id="total-balance">$0</div>
+          <div class="total-summary-sub" id="total-positions">0 positions across 0 accounts</div>
+        </div>
 
-      <div class="chart-container">
-        <div class="chart-title">Combined 10-Day Balance History</div>
-        <canvas id="combined-balance-chart"></canvas>
+        <div class="chart-container" style="margin-bottom: 0;">
+          <div class="chart-title">Combined 10-Day Balance History</div>
+          <canvas id="combined-balance-chart"></canvas>
+        </div>
       </div>
 
       <div class="summary-grid" id="accounts-summary-grid"></div>
