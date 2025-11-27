@@ -5,6 +5,8 @@ export interface Config {
   isTestnet: boolean
   telegramBotToken: string | null
   telegramChatId: string | null
+  telegramPolling: boolean
+  dashboardPort: number
   minOrderValue: number
   driftThresholdPercent: number
 }

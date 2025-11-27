@@ -1,9 +1,10 @@
 import express, { Request, Response } from 'express'
 import * as fs from 'fs'
 import * as path from 'path'
+import { config } from '@/config'
 
 const app = express()
-const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3000
+const PORT = config.dashboardPort
 const HOST = '0.0.0.0'
 const DATA_DIR = path.join(__dirname, '../../data')
 const FRONTEND_DIR = path.join(__dirname, '../../frontend')

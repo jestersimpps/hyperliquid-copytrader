@@ -28,8 +28,7 @@ module.exports = {
       watch: false,
       max_memory_restart: '200M',
       env: {
-        NODE_ENV: 'production',
-        PORT: 3000
+        NODE_ENV: 'production'
       },
       error_file: './logs/dashboard-error.log',
       out_file: './logs/dashboard-out.log',

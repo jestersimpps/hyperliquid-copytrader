@@ -33,6 +33,8 @@ export const config: Config = {
   isTestnet: getEnvBoolean('IS_TESTNET', false),
   telegramBotToken: getEnvVar('TELEGRAM_BOT_TOKEN'),
   telegramChatId: getEnvVar('TELEGRAM_CHAT_ID'),
+  telegramPolling: getEnvBoolean('TELEGRAM_POLLING', true),
+  dashboardPort: getEnvNumber('DASHBOARD_PORT', 3000),
   minOrderValue: getEnvNumber('MIN_ORDER_VALUE', 11),
   driftThresholdPercent: getEnvNumber('DRIFT_THRESHOLD_PERCENT', 1)
 }

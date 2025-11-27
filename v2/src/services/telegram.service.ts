@@ -20,12 +20,14 @@ export class TelegramService {
 
   constructor() {
     if (config.telegramBotToken && config.telegramChatId) {
-      this.bot = new TelegramBot(config.telegramBotToken, { polling: true })
+      this.bot = new TelegramBot(config.telegramBotToken, { polling: config.telegramPolling })
       this.chatId = config.telegramChatId
       this.enabled = true
-      this.setupCommands()
-      this.setupCallbackHandlers()
-      this.setupErrorHandlers()
+      if (config.telegramPolling) {
+        this.setupCommands()
+        this.setupCallbackHandlers()
+        this.setupErrorHandlers()
+      }
     }
   }
 
