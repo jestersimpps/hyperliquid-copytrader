@@ -52,7 +52,7 @@ app.get('/api/accounts', (req: Request, res: Response) => {
         tradingPaused: ctx.state.tradingPaused,
         hrefModeEnabled: ctx.state.hrefModeEnabled,
         trackedWallet: configAccount?.trackedWallet || '',
-        userWallet: configAccount?.userWallet || ''
+        userWallet: configAccount?.vaultAddress || configAccount?.userWallet || ''
       }
     })
     res.json({ accounts, count: accounts.length })
@@ -63,7 +63,7 @@ app.get('/api/accounts', (req: Request, res: Response) => {
       tradingPaused: false,
       hrefModeEnabled: false,
       trackedWallet: a.trackedWallet,
-      userWallet: a.userWallet
+      userWallet: a.vaultAddress || a.userWallet
     }))
     res.json({ accounts, count: accounts.length })
   }
