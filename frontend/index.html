@@ -679,6 +679,8 @@
     let userWs = null;
     let trackedFillsList = [];
     let userFillsList = [];
+    let trackedPingInterval = null;
+    let userPingInterval = null;
 
     const SYMBOL_COLORS = [
       '#667eea', '#17bf63', '#e0245e', '#ffad1f', '#1da1f2', '#f91880',
@@ -815,17 +817,18 @@
     }
 
     function subscribeToFills(wallet, type) {
-      const wsRef = type === 'tracked' ? 'trackedWs' : 'userWs';
       const statusId = type === 'tracked' ? 'tracked-ws-status' : 'user-ws-status';
-      const listId = type === 'tracked' ? 'tracked-fills-list' : 'user-fills-list';
 
-      if (type === 'tracked' && trackedWs) {
-        trackedWs.close();
+      if (type === 'tracked') {
+        if (trackedWs) trackedWs.close();
+        if (trackedPingInterval) clearInterval(trackedPingInterval);
         trackedWs = null;
-      }
-      if (type === 'user' && userWs) {
-        userWs.close();
+        trackedPingInterval = null;
+      } else {
+        if (userWs) userWs.close();
+        if (userPingInterval) clearInterval(userPingInterval);
         userWs = null;
+        userPingInterval = null;
       }
 
       const ws = new WebSocket('wss://api.hyperliquid.xyz/ws');
@@ -840,13 +843,25 @@
           statusEl.textContent = 'Connected';
           statusEl.className = 'ws-status connected';
         }
+
+        const pingInterval = setInterval(() => {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ method: 'ping' }));
+          }
+        }, 30000);
+
+        if (type === 'tracked') {
+          trackedPingInterval = pingInterval;
+        } else {
+          userPingInterval = pingInterval;
+        }
       };
 
       ws.onmessage = (event) => {
         try {
           const msg = JSON.parse(event.data);
+          if (msg.channel === 'pong') return;
           if (msg.channel === 'userFills' && msg.data) {
-            const fills = Array.isArray(msg.data) ? msg.data : [msg.data];
             const isSnapshot = msg.data.isSnapshot;
 
             if (isSnapshot && Array.isArray(msg.data.fills)) {
@@ -886,9 +901,28 @@
       ws.onclose = () => {
         const statusEl = document.getElementById(statusId);
         if (statusEl) {
-          statusEl.textContent = 'Disconnected';
+          statusEl.textContent = 'Reconnecting...';
           statusEl.className = 'ws-status disconnected';
         }
+        if (type === 'tracked' && trackedPingInterval) {
+          clearInterval(trackedPingInterval);
+          trackedPingInterval = null;
+        }
+        if (type === 'user' && userPingInterval) {
+          clearInterval(userPingInterval);
+          userPingInterval = null;
+        }
+        setTimeout(() => {
+          if (currentAccountId && currentAccountId !== 'summary') {
+            const account = accounts.find(a => a.id === currentAccountId);
+            if (account) {
+              const reconnectWallet = type === 'tracked' ? account.trackedWallet : account.userWallet;
+              if (reconnectWallet) {
+                subscribeToFills(reconnectWallet, type);
+              }
+            }
+          }
+        }, 3000);
       };
 
       if (type === 'tracked') {
