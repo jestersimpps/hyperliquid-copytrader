@@ -377,6 +377,27 @@ interface AccountSummary {
   positions: PositionSummary[]
   trackedPositions: PositionSummary[]
   tradingPaused: boolean
+  tradesLast10Min: number
+}
+
+function getTradesLast10Min(accountId: string): number {
+  const today = new Date().toISOString().split('T')[0]
+  const filePath = path.join(DATA_DIR, accountId, `trades-${today}.jsonl`)
+
+  if (!fs.existsSync(filePath)) {
+    return 0
+  }
+
+  const tenMinutesAgo = Date.now() - 10 * 60 * 1000
+  const content = fs.readFileSync(filePath, 'utf-8')
+  const trades = content
+    .trim()
+    .split('\n')
+    .filter(line => line)
+    .map(line => JSON.parse(line))
+    .filter(trade => trade.timestamp >= tenMinutesAgo)
+
+  return trades.length
 }
 
 app.get('/api/summary', async (req: Request, res: Response) => {
@@ -414,7 +435,8 @@ app.get('/api/summary', async (req: Request, res: Response) => {
           unrealizedPnl,
           positions,
           trackedPositions,
-          tradingPaused: ctx.state.tradingPaused
+          tradingPaused: ctx.state.tradingPaused,
+          tradesLast10Min: getTradesLast10Min(accountId)
         })
       }
     } else {
@@ -461,7 +483,8 @@ app.get('/api/summary', async (req: Request, res: Response) => {
           unrealizedPnl,
           positions,
           trackedPositions,
-          tradingPaused: false
+          tradingPaused: false,
+          tradesLast10Min: getTradesLast10Min(account.id)
         })
       }
     }
@@ -469,6 +492,7 @@ app.get('/api/summary', async (req: Request, res: Response) => {
     const totalBalance = summaries.reduce((sum, s) => sum + s.balance, 0)
     const totalPositions = summaries.reduce((sum, s) => sum + s.positions.length, 0)
     const totalUnrealizedPnl = summaries.reduce((sum, s) => sum + s.unrealizedPnl, 0)
+    const totalTradesLast10Min = summaries.reduce((sum, s) => sum + s.tradesLast10Min, 0)
 
     res.json({
       accounts: summaries,
@@ -476,7 +500,8 @@ app.get('/api/summary', async (req: Request, res: Response) => {
         balance: totalBalance,
         unrealizedPnl: totalUnrealizedPnl,
         positions: totalPositions,
-        accountCount: summaries.length
+        accountCount: summaries.length,
+        tradesLast10Min: totalTradesLast10Min
       }
     })
   } catch (error) {

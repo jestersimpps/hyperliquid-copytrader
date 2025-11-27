@@ -708,6 +708,7 @@
           <div class="total-summary-label">Total Balance (All Accounts)</div>
           <div class="total-summary-value" id="total-balance">$0</div>
           <div class="total-summary-sub" id="total-positions">0 positions across 0 accounts</div>
+          <div class="total-summary-sub" id="total-tpm">0 trades/min</div>
         </div>
 
         <div class="chart-container" style="margin-bottom: 0;">
@@ -1179,11 +1180,14 @@
         const totalBalance = summaryData.total?.balance || 0;
         const totalPositions = summaryData.total?.positions || 0;
         const accountCount = summaryData.total?.accountCount || 0;
+        const tradesLast10Min = summaryData.total?.tradesLast10Min || 0;
+        const tpm = (tradesLast10Min / 10).toFixed(1);
 
         document.getElementById('total-balance').textContent =
           `$${totalBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
         document.getElementById('total-positions').textContent =
           `${totalPositions} positions across ${accountCount} accounts`;
+        document.getElementById('total-tpm').textContent = `${tpm} trades/min`;
 
         renderAccountsSummaryGrid(summaryData.accounts || []);
         renderCombinedBalanceChart();
@@ -1207,6 +1211,7 @@
         const pnlClass = pnl >= 0 ? 'positive' : 'negative';
         const pnlSign = pnl >= 0 ? '+' : '';
         const positions = summary.positions || [];
+        const accountTpm = ((summary.tradesLast10Min || 0) / 10).toFixed(1);
         const trackedPositions = summary.trackedPositions || [];
         const trackedByCoins = {};
         for (const pos of trackedPositions) trackedByCoins[pos.coin] = pos;
@@ -1272,7 +1277,7 @@
           </div>
           <div class="summary-card-balance">$${summary.balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
           <div class="summary-card-pnl ${pnlClass}">PnL: ${pnlSign}$${Math.abs(pnl).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-          <div class="summary-card-positions">${positions.length} open positions</div>
+          <div class="summary-card-positions">${positions.length} open positions · ${accountTpm} trades/min</div>
           ${contentHtml}
           ${entryDiffHtml}
         `;
