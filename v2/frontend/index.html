@@ -422,6 +422,11 @@
   <div id="error" class="error" style="display: none;"></div>
 
   <div id="dashboard" style="display: none;">
+    <div class="chart-container" style="margin-bottom: 30px;">
+      <div class="chart-title">10-Day Balance History</div>
+      <canvas id="balance-history-chart"></canvas>
+    </div>
+
     <div class="daily-cards-container">
       <div class="daily-cards-title">Last 10 Days</div>
       <div class="daily-cards-grid" id="daily-cards-grid"></div>
@@ -509,6 +514,7 @@
     let allTrades = [];
     let trackedFills = [];
     let dailySummaryData = [];
+    let balanceHistoryData = [];
     let selectedDate = new Date().toISOString().split('T')[0];
 
     const SYMBOL_COLORS = [
@@ -569,20 +575,94 @@
       };
     }
 
+    function renderBalanceHistoryChart() {
+      if (balanceHistoryData.length === 0) return;
+
+      const dates = balanceHistoryData.map(d => new Date(d.date));
+      const balances = balanceHistoryData.map(d => d.balance);
+
+      const minBalance = Math.min(...balances);
+      const maxBalance = Math.max(...balances);
+      const padding = (maxBalance - minBalance) * 0.1 || 100;
+
+      if (chartInstances['balance-history-chart']) chartInstances['balance-history-chart'].destroy();
+      chartInstances['balance-history-chart'] = new Chart(document.getElementById('balance-history-chart').getContext('2d'), {
+        type: 'line',
+        data: {
+          labels: dates,
+          datasets: [{
+            label: 'Balance',
+            data: balances,
+            borderColor: '#00d4ff',
+            backgroundColor: 'rgba(0, 212, 255, 0.15)',
+            fill: true,
+            borderWidth: 3,
+            tension: 0.3,
+            pointRadius: 6,
+            pointBackgroundColor: '#00d4ff',
+            pointBorderColor: '#0a0e27',
+            pointBorderWidth: 2,
+            pointHoverRadius: 8
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { mode: 'index', intersect: false },
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              backgroundColor: '#192734',
+              titleColor: '#e1e8ed',
+              bodyColor: '#8899a6',
+              borderColor: '#38444d',
+              borderWidth: 1,
+              callbacks: {
+                label: ctx => `$${ctx.parsed.y.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+              }
+            }
+          },
+          scales: {
+            x: {
+              type: 'time',
+              time: {
+                unit: 'day',
+                tooltipFormat: 'MMM d, yyyy'
+              },
+              ticks: { color: '#8899a6', font: { size: 11 } },
+              grid: { color: '#38444d', display: true }
+            },
+            y: {
+              min: minBalance - padding,
+              max: maxBalance + padding,
+              ticks: {
+                color: '#8899a6',
+                font: { size: 11 },
+                callback: v => '$' + v.toLocaleString()
+              },
+              grid: { color: '#38444d', display: true }
+            }
+          }
+        }
+      });
+    }
+
     async function fetchSnapshots(date = null) {
       try {
         const targetDate = date || selectedDate;
-        const [snapshotsRes, tradesRes, trackedFillsRes, summaryRes] = await Promise.all([
+        const [snapshotsRes, tradesRes, trackedFillsRes, summaryRes, balanceHistoryRes] = await Promise.all([
           fetch(`/api/snapshots?date=${targetDate}`),
           fetch(`/api/trades?date=${targetDate}`),
           fetch(`/api/tracked-fills?date=${targetDate}`),
-          fetch('/api/daily-summary?days=10')
+          fetch('/api/daily-summary?days=10'),
+          fetch('/api/balance-history?days=10')
         ]);
 
         const snapshotsData = await snapshotsRes.json();
         const tradesData = await tradesRes.json();
         const trackedFillsData = await trackedFillsRes.json();
         const summaryData = await summaryRes.json();
+        const balanceHistoryDataRes = await balanceHistoryRes.json();
 
         if (!snapshotsRes.ok) {
           throw new Error(snapshotsData.error || 'Failed to fetch snapshots');
@@ -592,6 +672,7 @@
         allTrades = tradesData.trades || [];
         trackedFills = trackedFillsData.fills || [];
         dailySummaryData = summaryData.days || [];
+        balanceHistoryData = balanceHistoryDataRes.history || [];
 
         if (filteredSnapshots.length === 0) {
           showError(`No snapshot data available for ${targetDate}. Run the monitor to start collecting data.`);
@@ -635,6 +716,7 @@
       document.getElementById('error').style.display = 'none';
       document.getElementById('dashboard').style.display = 'block';
 
+      renderBalanceHistoryChart();
       renderDailyCards();
       updateStats();
       renderPositionsTable();

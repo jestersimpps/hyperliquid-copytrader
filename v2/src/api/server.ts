@@ -199,6 +199,37 @@ app.get('/api/tracked-fills', (req: Request, res: Response) => {
   }
 })
 
+app.get('/api/balance-history', (req: Request, res: Response) => {
+  try {
+    const daysParam = req.query.days as string
+    const numDays = daysParam ? parseInt(daysParam) : 10
+    const balanceHistory: Array<{ date: string; balance: number }> = []
+    const today = new Date()
+
+    for (let i = numDays - 1; i >= 0; i--) {
+      const date = new Date(today)
+      date.setDate(date.getDate() - i)
+      const dateStr = date.toISOString().split('T')[0]
+      const filePath = path.join(DATA_DIR, `snapshots-${dateStr}.jsonl`)
+
+      if (fs.existsSync(filePath)) {
+        const content = fs.readFileSync(filePath, 'utf-8')
+        const lines = content.trim().split('\n').filter(line => line)
+
+        if (lines.length > 0) {
+          const last = JSON.parse(lines[lines.length - 1])
+          const balance = last.user?.accountValue || 0
+          balanceHistory.push({ date: dateStr, balance })
+        }
+      }
+    }
+
+    res.json({ history: balanceHistory, count: balanceHistory.length })
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to read balance history' })
+  }
+})
+
 app.get('/api/daily-summary', (req: Request, res: Response) => {
   try {
     const daysParam = req.query.days as string
