@@ -102,52 +102,56 @@ export class HyperliquidService {
   }
 
   async getOpenPositions(walletAddress: string): Promise<Position[]> {
-    const state = await this.publicClient.clearinghouseState({
-      user: walletAddress as `0x${string}`
-    })
-
-    return state.assetPositions
-      .filter((pos: AssetPosition) => parseFloat(pos.position.szi) !== 0)
-      .map((pos: AssetPosition) => {
-        const size = parseFloat(pos.position.szi)
-        const markPrice = parseFloat(pos.position.positionValue) / Math.abs(size)
-        return {
-          coin: pos.position.coin,
-          size: Math.abs(size),
-          entryPrice: parseFloat(pos.position.entryPx || '0'),
-          markPrice,
-          unrealizedPnl: parseFloat(pos.position.unrealizedPnl),
-          leverage: typeof pos.position.leverage.value === 'number'
-            ? pos.position.leverage.value
-            : parseFloat(pos.position.leverage.value),
-          marginUsed: parseFloat(pos.position.marginUsed),
-          liquidationPrice: parseFloat(pos.position.liquidationPx || '0'),
-          side: size > 0 ? 'long' : 'short',
-          notionalValue: Math.abs(size) * markPrice
-        } as Position
+    return this.withRetry(async () => {
+      const state = await this.publicClient.clearinghouseState({
+        user: walletAddress as `0x${string}`
       })
+
+      return state.assetPositions
+        .filter((pos: AssetPosition) => parseFloat(pos.position.szi) !== 0)
+        .map((pos: AssetPosition) => {
+          const size = parseFloat(pos.position.szi)
+          const markPrice = parseFloat(pos.position.positionValue) / Math.abs(size)
+          return {
+            coin: pos.position.coin,
+            size: Math.abs(size),
+            entryPrice: parseFloat(pos.position.entryPx || '0'),
+            markPrice,
+            unrealizedPnl: parseFloat(pos.position.unrealizedPnl),
+            leverage: typeof pos.position.leverage.value === 'number'
+              ? pos.position.leverage.value
+              : parseFloat(pos.position.leverage.value),
+            marginUsed: parseFloat(pos.position.marginUsed),
+            liquidationPrice: parseFloat(pos.position.liquidationPx || '0'),
+            side: size > 0 ? 'long' : 'short',
+            notionalValue: Math.abs(size) * markPrice
+          } as Position
+        })
+    }, `getOpenPositions(${walletAddress.slice(0, 6)}...)`)
   }
 
   async getAccountBalance(walletAddress: string): Promise<Balance> {
-    const state = await this.publicClient.clearinghouseState({
-      user: walletAddress as `0x${string}`
-    })
+    return this.withRetry(async () => {
+      const state = await this.publicClient.clearinghouseState({
+        user: walletAddress as `0x${string}`
+      })
 
-    return {
-      accountValue: state.marginSummary.accountValue,
-      withdrawable: state.withdrawable,
-      totalMarginUsed: state.marginSummary.totalMarginUsed,
-      crossMaintenanceMarginUsed: state.crossMaintenanceMarginUsed,
-      totalNtlPos: state.marginSummary.totalNtlPos,
-      totalRawUsd: state.marginSummary.totalRawUsd,
-      crossMarginSummary: {
-        accountValue: state.crossMarginSummary.accountValue,
-        totalNtlPos: state.crossMarginSummary.totalNtlPos,
-        totalRawUsd: state.crossMarginSummary.totalRawUsd,
-        totalMarginUsed: state.crossMarginSummary.totalMarginUsed
-      },
-      timestamp: state.time
-    }
+      return {
+        accountValue: state.marginSummary.accountValue,
+        withdrawable: state.withdrawable,
+        totalMarginUsed: state.marginSummary.totalMarginUsed,
+        crossMaintenanceMarginUsed: state.crossMaintenanceMarginUsed,
+        totalNtlPos: state.marginSummary.totalNtlPos,
+        totalRawUsd: state.marginSummary.totalRawUsd,
+        crossMarginSummary: {
+          accountValue: state.crossMarginSummary.accountValue,
+          totalNtlPos: state.crossMarginSummary.totalNtlPos,
+          totalRawUsd: state.crossMarginSummary.totalRawUsd,
+          totalMarginUsed: state.crossMarginSummary.totalMarginUsed
+        },
+        timestamp: state.time
+      }
+    }, `getAccountBalance(${walletAddress.slice(0, 6)}...)`)
   }
 
   private getCoinIndex(coin: string): number {
@@ -252,6 +256,26 @@ export class HyperliquidService {
 
   private sleep(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms))
+  }
+
+  private async withRetry<T>(operation: () => Promise<T>, operationName: string, maxRetries: number = 3): Promise<T> {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        return await operation()
+      } catch (error) {
+        const isLastAttempt = attempt === maxRetries
+        const errorMessage = error instanceof Error ? error.message : String(error)
+
+        if (isLastAttempt) {
+          throw error
+        }
+
+        const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000)
+        console.log(`   🔄 ${operationName} failed (attempt ${attempt}/${maxRetries}): ${errorMessage}, retrying in ${delay}ms...`)
+        await this.sleep(delay)
+      }
+    }
+    throw new Error(`${operationName} failed after ${maxRetries} attempts`)
   }
 
   private async placeMarketBuy(

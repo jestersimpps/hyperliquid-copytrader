@@ -351,24 +351,50 @@ app.get('/api/daily-summary', (req: Request, res: Response) => {
   }
 })
 
+interface PositionSummary {
+  coin: string
+  side: string
+  size: number
+  notionalValue: number
+  entryPrice: number
+  markPrice: number
+  unrealizedPnl: number
+  leverage: number
+}
+
+interface AccountSummary {
+  accountId: string
+  name: string
+  balance: number
+  unrealizedPnl: number
+  positions: PositionSummary[]
+  tradingPaused: boolean
+}
+
 app.get('/api/summary', async (req: Request, res: Response) => {
   try {
-    const summaries: Array<{
-      accountId: string
-      name: string
-      balance: number
-      positions: number
-      tradingPaused: boolean
-    }> = []
+    const summaries: AccountSummary[] = []
 
     if (accountContexts.size > 0) {
       for (const [accountId, ctx] of accountContexts) {
         const snapshot = await ctx.balanceMonitor.getSnapshot()
+        const positions: PositionSummary[] = snapshot?.userPositions.map(p => ({
+          coin: p.coin,
+          side: p.side,
+          size: p.size,
+          notionalValue: p.notionalValue,
+          entryPrice: p.entryPrice,
+          markPrice: p.markPrice,
+          unrealizedPnl: p.unrealizedPnl,
+          leverage: p.leverage
+        })) || []
+        const unrealizedPnl = positions.reduce((sum, p) => sum + p.unrealizedPnl, 0)
         summaries.push({
           accountId,
           name: ctx.state.name,
           balance: snapshot ? parseFloat(snapshot.userBalance.accountValue) : 0,
-          positions: snapshot ? snapshot.userPositions.length : 0,
+          unrealizedPnl,
+          positions,
           tradingPaused: ctx.state.tradingPaused
         })
       }
@@ -377,20 +403,32 @@ app.get('/api/summary', async (req: Request, res: Response) => {
       for (const account of globalConfig.accounts.filter(a => a.enabled)) {
         const filePath = path.join(DATA_DIR, account.id, `snapshots-${today}.jsonl`)
         let balance = 0
-        let positions = 0
+        let positions: PositionSummary[] = []
+        let unrealizedPnl = 0
         if (fs.existsSync(filePath)) {
           const content = fs.readFileSync(filePath, 'utf-8')
           const lines = content.trim().split('\n').filter(line => line)
           if (lines.length > 0) {
             const lastSnapshot = JSON.parse(lines[lines.length - 1])
             balance = lastSnapshot.user?.accountValue || 0
-            positions = lastSnapshot.user?.positions?.length || 0
+            positions = (lastSnapshot.user?.positions || []).map((p: Record<string, unknown>) => ({
+              coin: p.coin,
+              side: p.side,
+              size: p.size,
+              notionalValue: p.notionalValue,
+              entryPrice: p.entryPrice,
+              markPrice: p.markPrice,
+              unrealizedPnl: p.unrealizedPnl || 0,
+              leverage: p.leverage
+            }))
+            unrealizedPnl = positions.reduce((sum, p) => sum + p.unrealizedPnl, 0)
           }
         }
         summaries.push({
           accountId: account.id,
           name: account.name,
           balance,
+          unrealizedPnl,
           positions,
           tradingPaused: false
         })
@@ -398,12 +436,14 @@ app.get('/api/summary', async (req: Request, res: Response) => {
     }
 
     const totalBalance = summaries.reduce((sum, s) => sum + s.balance, 0)
-    const totalPositions = summaries.reduce((sum, s) => sum + s.positions, 0)
+    const totalPositions = summaries.reduce((sum, s) => sum + s.positions.length, 0)
+    const totalUnrealizedPnl = summaries.reduce((sum, s) => sum + s.unrealizedPnl, 0)
 
     res.json({
       accounts: summaries,
       total: {
         balance: totalBalance,
+        unrealizedPnl: totalUnrealizedPnl,
         positions: totalPositions,
         accountCount: summaries.length
       }

@@ -148,6 +148,62 @@
       color: #8899a6;
     }
 
+    .summary-card-pnl {
+      font-size: 1.1em;
+      font-weight: 600;
+      margin-bottom: 12px;
+    }
+
+    .summary-card-positions-list {
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .summary-position-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 0;
+      font-size: 0.85em;
+    }
+
+    .summary-position-coin {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .summary-position-side {
+      font-size: 0.7em;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+    }
+
+    .summary-position-side.long {
+      background: rgba(23, 191, 99, 0.2);
+      color: #17bf63;
+    }
+
+    .summary-position-side.short {
+      background: rgba(224, 36, 94, 0.2);
+      color: #e0245e;
+    }
+
+    .summary-position-details {
+      text-align: right;
+    }
+
+    .summary-position-size {
+      color: #8899a6;
+      font-size: 0.9em;
+    }
+
+    .summary-position-pnl {
+      font-weight: 500;
+    }
+
     .stats-grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -590,6 +646,35 @@
 
         const statusClass = summary.tradingPaused ? 'status-paused' : 'status-active';
         const statusText = summary.tradingPaused ? 'Paused' : 'Active';
+        const pnl = summary.unrealizedPnl || 0;
+        const pnlClass = pnl >= 0 ? 'positive' : 'negative';
+        const pnlSign = pnl >= 0 ? '+' : '';
+        const positions = summary.positions || [];
+
+        let positionsHtml = '';
+        if (positions.length > 0) {
+          positionsHtml = '<div class="summary-card-positions-list">';
+          for (const pos of positions) {
+            const posPnl = pos.unrealizedPnl || 0;
+            const posPnlClass = posPnl >= 0 ? 'positive' : 'negative';
+            const posPnlSign = posPnl >= 0 ? '+' : '';
+            const sideClass = pos.side === 'long' ? 'long' : 'short';
+            const notional = pos.notionalValue || 0;
+            positionsHtml += `
+              <div class="summary-position-row">
+                <div class="summary-position-coin">
+                  <span>${pos.coin}</span>
+                  <span class="summary-position-side ${sideClass}">${pos.side.toUpperCase()}</span>
+                </div>
+                <div class="summary-position-details">
+                  <div class="summary-position-size">$${Math.abs(notional).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</div>
+                  <div class="summary-position-pnl ${posPnlClass}">${posPnlSign}$${Math.abs(posPnl).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                </div>
+              </div>
+            `;
+          }
+          positionsHtml += '</div>';
+        }
 
         card.innerHTML = `
           <div class="summary-card-header">
@@ -597,7 +682,9 @@
             <span class="summary-card-status ${statusClass}">${statusText}</span>
           </div>
           <div class="summary-card-balance">$${summary.balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-          <div class="summary-card-positions">${summary.positions} open positions</div>
+          <div class="summary-card-pnl ${pnlClass}">PnL: ${pnlSign}$${Math.abs(pnl).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+          <div class="summary-card-positions">${positions.length} open positions</div>
+          ${positionsHtml}
         `;
 
         container.appendChild(card);
