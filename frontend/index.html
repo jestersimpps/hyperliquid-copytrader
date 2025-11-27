@@ -450,18 +450,15 @@
       display: flex;
       justify-content: center;
       gap: 40px;
-      height: 100%;
     }
     .dual-pie-container canvas {
-      min-height: 200px;
-      max-height: 280px;
+      width: 150px !important;
+      height: 150px !important;
     }
     .pie-wrapper {
       display: flex;
       flex-direction: column;
       align-items: center;
-      flex: 1;
-      max-width: 280px;
     }
     .pie-label {
       color: #8899a6;
@@ -469,6 +466,34 @@
       margin-top: 8px;
       text-transform: uppercase;
       letter-spacing: 1px;
+    }
+    .pie-legend {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 12px 20px;
+      margin-top: 16px;
+      padding-top: 12px;
+      border-top: 1px solid rgba(255,255,255,0.1);
+    }
+    .pie-legend-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: #e1e8ed;
+    }
+    .pie-legend-color {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+    }
+    #position-allocation-chart-container {
+      overflow: visible;
+    }
+    #position-allocation-chart-container canvas {
+      min-height: unset;
+      max-height: unset;
     }
 
     .loading { text-align: center; padding: 50px; font-size: 1.5em; color: #8899a6; }
@@ -755,6 +780,7 @@
               <div class="pie-label">User</div>
             </div>
           </div>
+          <div class="pie-legend" id="allocation-legend"></div>
         </div>
         <div class="chart-container" id="position-size-chart-container">
           <div class="chart-title">Position Size (% of Balance)</div>
@@ -1892,6 +1918,19 @@
 
       renderAllocationPie('tracked-allocation-chart', trackedPositions, trackedAccountValue);
       renderAllocationPie('user-allocation-chart', userPositions, userAccountValue);
+
+      const allCoins = new Set();
+      trackedPositions.forEach(p => allCoins.add(p.coin));
+      userPositions.forEach(p => allCoins.add(p.coin));
+      allCoins.add('Cash');
+
+      const legendContainer = document.getElementById('allocation-legend');
+      legendContainer.innerHTML = Array.from(allCoins).map(coin => `
+        <div class="pie-legend-item">
+          <div class="pie-legend-color" style="background: ${coin === 'Cash' ? '#38444d' : getSymbolColor(coin)}"></div>
+          <span>${coin}</span>
+        </div>
+      `).join('');
     }
 
     function renderAllocationPie(canvasId, positions, accountValue) {
