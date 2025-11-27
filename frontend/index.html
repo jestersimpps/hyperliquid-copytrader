@@ -467,8 +467,8 @@
       width: 100%;
     }
     .pie-center-wrapper canvas {
-      width: 160px !important;
-      height: 160px !important;
+      max-width: 160px !important;
+      max-height: 160px !important;
     }
     .pie-legend {
       display: flex;
@@ -1945,7 +1945,7 @@
         },
         options: {
           responsive: true,
-          maintainAspectRatio: false,
+          maintainAspectRatio: true,
           plugins: {
             legend: { display: false },
             tooltip: {
