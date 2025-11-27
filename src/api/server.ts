@@ -44,19 +44,26 @@ app.get('/api/health', (req: Request, res: Response) => {
 
 app.get('/api/accounts', (req: Request, res: Response) => {
   if (accountContexts.size > 0) {
-    const accounts = Array.from(accountContexts.values()).map(ctx => ({
-      id: ctx.id,
-      name: ctx.state.name,
-      tradingPaused: ctx.state.tradingPaused,
-      hrefModeEnabled: ctx.state.hrefModeEnabled
-    }))
+    const accounts = Array.from(accountContexts.values()).map(ctx => {
+      const configAccount = globalConfig.accounts.find(a => a.id === ctx.id)
+      return {
+        id: ctx.id,
+        name: ctx.state.name,
+        tradingPaused: ctx.state.tradingPaused,
+        hrefModeEnabled: ctx.state.hrefModeEnabled,
+        trackedWallet: configAccount?.trackedWallet || '',
+        userWallet: configAccount?.userWallet || ''
+      }
+    })
     res.json({ accounts, count: accounts.length })
   } else {
     const accounts = globalConfig.accounts.filter(a => a.enabled).map(a => ({
       id: a.id,
       name: a.name,
       tradingPaused: false,
-      hrefModeEnabled: false
+      hrefModeEnabled: false,
+      trackedWallet: a.trackedWallet,
+      userWallet: a.userWallet
     }))
     res.json({ accounts, count: accounts.length })
   }
@@ -368,6 +375,7 @@ interface AccountSummary {
   balance: number
   unrealizedPnl: number
   positions: PositionSummary[]
+  trackedPositions: PositionSummary[]
   tradingPaused: boolean
 }
 
@@ -388,6 +396,16 @@ app.get('/api/summary', async (req: Request, res: Response) => {
           unrealizedPnl: p.unrealizedPnl,
           leverage: p.leverage
         })) || []
+        const trackedPositions: PositionSummary[] = snapshot?.trackedPositions.map(p => ({
+          coin: p.coin,
+          side: p.side,
+          size: p.size,
+          notionalValue: p.notionalValue,
+          entryPrice: p.entryPrice,
+          markPrice: p.markPrice,
+          unrealizedPnl: p.unrealizedPnl,
+          leverage: p.leverage
+        })) || []
         const unrealizedPnl = positions.reduce((sum, p) => sum + p.unrealizedPnl, 0)
         summaries.push({
           accountId,
@@ -395,6 +413,7 @@ app.get('/api/summary', async (req: Request, res: Response) => {
           balance: snapshot ? parseFloat(snapshot.userBalance.accountValue) : 0,
           unrealizedPnl,
           positions,
+          trackedPositions,
           tradingPaused: ctx.state.tradingPaused
         })
       }
@@ -404,6 +423,7 @@ app.get('/api/summary', async (req: Request, res: Response) => {
         const filePath = path.join(DATA_DIR, account.id, `snapshots-${today}.jsonl`)
         let balance = 0
         let positions: PositionSummary[] = []
+        let trackedPositions: PositionSummary[] = []
         let unrealizedPnl = 0
         if (fs.existsSync(filePath)) {
           const content = fs.readFileSync(filePath, 'utf-8')
@@ -412,6 +432,16 @@ app.get('/api/summary', async (req: Request, res: Response) => {
             const lastSnapshot = JSON.parse(lines[lines.length - 1])
             balance = lastSnapshot.user?.accountValue || 0
             positions = (lastSnapshot.user?.positions || []).map((p: Record<string, unknown>) => ({
+              coin: p.coin,
+              side: p.side,
+              size: p.size,
+              notionalValue: p.notionalValue,
+              entryPrice: p.entryPrice,
+              markPrice: p.markPrice,
+              unrealizedPnl: p.unrealizedPnl || 0,
+              leverage: p.leverage
+            }))
+            trackedPositions = (lastSnapshot.tracked?.positions || []).map((p: Record<string, unknown>) => ({
               coin: p.coin,
               side: p.side,
               size: p.size,
@@ -430,6 +460,7 @@ app.get('/api/summary', async (req: Request, res: Response) => {
           balance,
           unrealizedPnl,
           positions,
+          trackedPositions,
           tradingPaused: false
         })
       }

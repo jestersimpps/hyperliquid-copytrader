@@ -204,6 +204,64 @@
       font-weight: 500;
     }
 
+    .entry-diff-mini-chart {
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .entry-diff-mini-chart canvas {
+      width: 100% !important;
+      height: 80px !important;
+    }
+
+    .hyperformance-iframes {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      margin-bottom: 30px;
+    }
+
+    .iframe-container {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 16px;
+      overflow: hidden;
+    }
+
+    .iframe-header {
+      padding: 12px 16px;
+      background: rgba(255, 255, 255, 0.03);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      font-size: 0.9em;
+      color: #8899a6;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .iframe-header a {
+      color: #00d4ff;
+      text-decoration: none;
+      font-size: 0.85em;
+    }
+
+    .iframe-header a:hover {
+      text-decoration: underline;
+    }
+
+    .iframe-container iframe {
+      width: 100%;
+      height: 100vh;
+      border: none;
+    }
+
+    @media (max-width: 1200px) {
+      .hyperformance-iframes {
+        grid-template-columns: 1fr;
+      }
+    }
+
     .stats-grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -469,6 +527,17 @@
         </div>
       </div>
 
+      <div class="charts-row" id="position-charts-row" style="display: none;">
+        <div class="chart-container" id="position-allocation-chart-container">
+          <div class="chart-title">Position Allocation (% of Balance)</div>
+          <canvas id="position-allocation-chart"></canvas>
+        </div>
+        <div class="chart-container" id="position-size-chart-container">
+          <div class="chart-title">Position Size (% of Balance)</div>
+          <canvas id="position-size-chart"></canvas>
+        </div>
+      </div>
+
       <div class="positions-section">
         <div class="positions-title">Current Positions</div>
         <div id="positions-container"></div>
@@ -499,6 +568,8 @@
           <canvas id="risk-chart"></canvas>
         </div>
       </div>
+
+      <div class="hyperformance-iframes" id="hyperformance-iframes"></div>
     </div>
   </div>
 
@@ -603,8 +674,39 @@
       } else {
         document.getElementById('summary-view').style.display = 'none';
         document.getElementById('account-view').style.display = 'block';
+        renderHyperformanceIframes(accountId);
         await fetchSnapshots(selectedDate);
       }
+    }
+
+    function renderHyperformanceIframes(accountId) {
+      const container = document.getElementById('hyperformance-iframes');
+      const account = accounts.find(a => a.id === accountId);
+
+      if (!account || !account.trackedWallet || !account.userWallet) {
+        container.innerHTML = '';
+        return;
+      }
+
+      const trackedUrl = `https://hyperformance.xyz/trade?${account.trackedWallet}`;
+      const userUrl = `https://hyperformance.xyz/trade?${account.userWallet}`;
+
+      container.innerHTML = `
+        <div class="iframe-container">
+          <div class="iframe-header">
+            <span>Tracked Account</span>
+            <a href="${trackedUrl}" target="_blank">${account.trackedWallet.slice(0, 6)}...${account.trackedWallet.slice(-4)}</a>
+          </div>
+          <iframe src="${trackedUrl}" loading="lazy"></iframe>
+        </div>
+        <div class="iframe-container">
+          <div class="iframe-header">
+            <span>User Account</span>
+            <a href="${userUrl}" target="_blank">${account.userWallet.slice(0, 6)}...${account.userWallet.slice(-4)}</a>
+          </div>
+          <iframe src="${userUrl}" loading="lazy"></iframe>
+        </div>
+      `;
     }
 
     async function loadSummaryView() {
@@ -650,6 +752,9 @@
         const pnlClass = pnl >= 0 ? 'positive' : 'negative';
         const pnlSign = pnl >= 0 ? '+' : '';
         const positions = summary.positions || [];
+        const trackedPositions = summary.trackedPositions || [];
+        const trackedByCoins = {};
+        for (const pos of trackedPositions) trackedByCoins[pos.coin] = pos;
 
         let positionsHtml = '';
         if (positions.length > 0) {
@@ -676,6 +781,23 @@
           positionsHtml += '</div>';
         }
 
+        const entryDiffData = [];
+        for (const pos of positions) {
+          const trackedPos = trackedByCoins[pos.coin];
+          if (trackedPos && pos.entryPrice && trackedPos.entryPrice) {
+            const diffPct = ((pos.entryPrice - trackedPos.entryPrice) / trackedPos.entryPrice) * 100;
+            const isLong = pos.side === 'long';
+            const isFavorable = isLong ? diffPct < 0 : diffPct > 0;
+            entryDiffData.push({ coin: pos.coin, diffPct, isFavorable });
+          }
+        }
+
+        const chartId = `entry-diff-mini-${summary.accountId}`;
+        let entryDiffHtml = '';
+        if (entryDiffData.length > 0) {
+          entryDiffHtml = `<div class="entry-diff-mini-chart"><canvas id="${chartId}"></canvas></div>`;
+        }
+
         card.innerHTML = `
           <div class="summary-card-header">
             <span class="summary-card-name">${summary.name}</span>
@@ -685,10 +807,66 @@
           <div class="summary-card-pnl ${pnlClass}">PnL: ${pnlSign}$${Math.abs(pnl).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
           <div class="summary-card-positions">${positions.length} open positions</div>
           ${positionsHtml}
+          ${entryDiffHtml}
         `;
 
         container.appendChild(card);
+
+        if (entryDiffData.length > 0) {
+          renderEntryDiffMiniChart(chartId, entryDiffData);
+        }
       }
+    }
+
+    function renderEntryDiffMiniChart(chartId, entryDiffData) {
+      const ctx = document.getElementById(chartId);
+      if (!ctx) return;
+
+      entryDiffData.sort((a, b) => Math.abs(b.diffPct) - Math.abs(a.diffPct));
+      const labels = entryDiffData.map(d => d.coin);
+      const data = entryDiffData.map(d => d.diffPct);
+      const colors = entryDiffData.map(d => d.isFavorable ? '#17bf63' : '#e0245e');
+
+      new Chart(ctx.getContext('2d'), {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [{
+            data,
+            backgroundColor: colors,
+            borderColor: colors,
+            borderWidth: 1
+          }]
+        },
+        options: {
+          indexAxis: 'y',
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              backgroundColor: '#192734',
+              callbacks: {
+                label: ctx => {
+                  const d = entryDiffData[ctx.dataIndex];
+                  const sign = d.diffPct >= 0 ? '+' : '';
+                  return `${sign}${d.diffPct.toFixed(3)}%`;
+                }
+              }
+            }
+          },
+          scales: {
+            x: {
+              display: false,
+              grid: { display: false }
+            },
+            y: {
+              grid: { display: false },
+              ticks: { color: '#8899a6', font: { size: 10 } }
+            }
+          }
+        }
+      });
     }
 
     function renderCombinedBalanceChart() {
@@ -817,6 +995,8 @@
       renderDailyCards();
       updateStats();
       renderPositionsTable();
+      renderPositionAllocationChart();
+      renderPositionSizeChart();
       renderBalanceChart();
       renderPnlChart();
       renderRealizedPnlChart();
@@ -1168,6 +1348,173 @@
 
       html += '</tbody></table>';
       container.innerHTML = html;
+    }
+
+    function renderPositionAllocationChart() {
+      const latest = filteredSnapshots[filteredSnapshots.length - 1];
+      const userPositions = latest.user.positions || [];
+      const accountValue = latest.user.accountValue || 1;
+
+      const rowContainer = document.getElementById('position-charts-row');
+      if (userPositions.length === 0) {
+        rowContainer.style.display = 'none';
+        return;
+      }
+      rowContainer.style.display = 'grid';
+
+      const positionData = userPositions.map(pos => ({
+        coin: pos.coin,
+        pct: (Math.abs(pos.notionalValue || 0) / accountValue) * 100
+      }));
+
+      const totalPositionPct = positionData.reduce((sum, p) => sum + p.pct, 0);
+      const cashPct = Math.max(0, 100 - totalPositionPct);
+
+      const labels = [...positionData.map(p => p.coin), 'Cash'];
+      const data = [...positionData.map(p => p.pct), cashPct];
+      const colors = [...positionData.map(p => getSymbolColor(p.coin)), '#38444d'];
+
+      if (chartInstances['position-allocation-chart']) chartInstances['position-allocation-chart'].destroy();
+      chartInstances['position-allocation-chart'] = new Chart(document.getElementById('position-allocation-chart').getContext('2d'), {
+        type: 'doughnut',
+        data: {
+          labels,
+          datasets: [{
+            data,
+            backgroundColor: colors,
+            borderColor: '#1a1a2e',
+            borderWidth: 2
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              position: 'right',
+              labels: {
+                color: '#e1e8ed',
+                font: { size: 11 },
+                padding: 10,
+                usePointStyle: true,
+                pointStyle: 'circle'
+              }
+            },
+            tooltip: {
+              backgroundColor: '#192734',
+              titleColor: '#e1e8ed',
+              bodyColor: '#8899a6',
+              callbacks: {
+                label: ctx => `${ctx.label}: ${ctx.parsed.toFixed(1)}%`
+              }
+            }
+          }
+        }
+      });
+    }
+
+    function renderPositionSizeChart() {
+      if (filteredSnapshots.length === 0) return;
+
+      const allCoins = new Set();
+      for (const snapshot of filteredSnapshots) {
+        const userPositions = snapshot.user?.positions || [];
+        const trackedPositions = snapshot.tracked?.positions || [];
+        userPositions.forEach(p => allCoins.add(p.coin));
+        trackedPositions.forEach(p => allCoins.add(p.coin));
+      }
+
+      if (allCoins.size === 0) return;
+
+      const dates = filteredSnapshots.map(s => new Date(s.timestamp));
+      const datasets = [];
+
+      for (const coin of allCoins) {
+        const color = getSymbolColor(coin);
+
+        const trackedSizesPct = filteredSnapshots.map(s => {
+          const pos = (s.tracked?.positions || []).find(p => p.coin === coin);
+          const balance = s.tracked?.accountValue || 1;
+          return pos ? (Math.abs(pos.notionalValue || 0) / balance) * 100 : 0;
+        });
+
+        const userSizesPct = filteredSnapshots.map(s => {
+          const pos = (s.user?.positions || []).find(p => p.coin === coin);
+          const balance = s.user?.accountValue || 1;
+          return pos ? (Math.abs(pos.notionalValue || 0) / balance) * 100 : 0;
+        });
+
+        const hasTrackedData = trackedSizesPct.some(v => v > 0);
+        const hasUserData = userSizesPct.some(v => v > 0);
+
+        if (hasTrackedData) {
+          datasets.push({
+            label: `${coin} (Tracked)`,
+            data: trackedSizesPct,
+            borderColor: color,
+            backgroundColor: color + '20',
+            borderWidth: 2,
+            tension: 0.1,
+            pointRadius: 0,
+            fill: false
+          });
+        }
+
+        if (hasUserData) {
+          datasets.push({
+            label: `${coin} (User)`,
+            data: userSizesPct,
+            borderColor: color,
+            backgroundColor: color + '20',
+            borderWidth: 2,
+            borderDash: [5, 5],
+            tension: 0.1,
+            pointRadius: 0,
+            fill: false
+          });
+        }
+      }
+
+      if (chartInstances['position-size-chart']) chartInstances['position-size-chart'].destroy();
+      chartInstances['position-size-chart'] = new Chart(document.getElementById('position-size-chart').getContext('2d'), {
+        type: 'line',
+        data: {
+          labels: dates,
+          datasets
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { mode: 'index', intersect: false },
+          plugins: {
+            legend: { position: 'bottom', labels: { color: '#e1e8ed', font: { size: 10 } } },
+            tooltip: {
+              backgroundColor: '#192734',
+              titleColor: '#e1e8ed',
+              bodyColor: '#8899a6',
+              callbacks: {
+                label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(1)}%`
+              }
+            }
+          },
+          scales: {
+            x: {
+              type: 'time',
+              time: { tooltipFormat: 'MMM d, HH:mm' },
+              ticks: { color: '#8899a6' },
+              grid: { color: '#38444d' }
+            },
+            y: {
+              title: { display: true, text: '% of Balance', color: '#8899a6' },
+              ticks: {
+                color: '#8899a6',
+                callback: v => v.toFixed(0) + '%'
+              },
+              grid: { color: '#38444d' }
+            }
+          }
+        }
+      });
     }
 
     function getChartOptions(yLabel, tickCallback) {
