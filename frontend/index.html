@@ -510,6 +510,58 @@
     .direction-short { color: #e0245e; font-weight: bold; padding: 4px 8px; background: rgba(224, 36, 94, 0.15); border-radius: 4px; }
     .no-positions { text-align: center; color: #8899a6; padding: 30px; }
 
+    .positions-mobile {
+      display: none;
+    }
+
+    .position-card {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 10px;
+      padding: 12px;
+      margin-bottom: 10px;
+    }
+
+    .position-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    .position-card-coin {
+      font-size: 1.1em;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .position-card-pnl {
+      font-weight: 600;
+      font-size: 1em;
+    }
+
+    .position-card-details {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      font-size: 0.85em;
+    }
+
+    .position-card-row {
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .position-card-label {
+      color: #657786;
+    }
+
+    .position-card-value {
+      color: #e1e8ed;
+    }
+
     .charts-row {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -526,6 +578,9 @@
       .charts-row { grid-template-columns: 1fr; }
       .summary-grid { grid-template-columns: 1fr; }
       .positions-table { display: none; }
+      .positions-mobile { display: block; }
+      .fills-section { grid-template-columns: 1fr; }
+      .fill-item { grid-template-columns: 60px 55px 35px 65px 75px 55px; gap: 4px; font-size: 0.75em; padding: 5px 8px; }
     }
 
     @media (min-width: 769px) and (max-width: 1024px) {
@@ -1593,7 +1648,8 @@
         return;
       }
 
-      let html = `<table class="positions-table"><thead><tr><th>Coin</th><th>Direction</th><th>Size</th><th>User Entry</th><th>Tracked Entry</th><th>PNL</th></tr></thead><tbody>`;
+      let tableHtml = `<table class="positions-table"><thead><tr><th>Coin</th><th>Direction</th><th>Size</th><th>User Entry</th><th>Tracked Entry</th><th>PNL</th></tr></thead><tbody>`;
+      let mobileHtml = '<div class="positions-mobile">';
 
       for (const pos of userPositions) {
         const isLong = pos.side === 'long';
@@ -1609,19 +1665,52 @@
         const trackedEntryFormatted = trackedEntry ? '$' + trackedEntry.toLocaleString(undefined, {minimumFractionDigits: 4, maximumFractionDigits: 4}) : '-';
 
         let entryDiffHtml = '';
+        let entryDiffMobileHtml = '';
         if (trackedEntry && pos.entryPrice) {
           const diffPct = ((pos.entryPrice - trackedEntry) / trackedEntry) * 100;
           const isFavorable = isLong ? diffPct < 0 : diffPct > 0;
           const diffClass = isFavorable ? 'positive' : 'negative';
           const diffSign = diffPct >= 0 ? '+' : '';
           entryDiffHtml = `<span class="${diffClass}" style="margin-left: 8px; font-size: 0.85em;">(${diffSign}${diffPct.toFixed(2)}%)</span>`;
+          entryDiffMobileHtml = `<span class="${diffClass}">(${diffSign}${diffPct.toFixed(2)}%)</span>`;
         }
 
-        html += `<tr><td>${pos.coin}</td><td><span class="${directionClass}">${direction}</span></td><td>${sizeFormatted}</td><td>${entryFormatted}${entryDiffHtml}</td><td>${trackedEntryFormatted}</td><td class="${pnlClass}">${pnlSign}$${Math.abs(pnl).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td></tr>`;
+        tableHtml += `<tr><td>${pos.coin}</td><td><span class="${directionClass}">${direction}</span></td><td>${sizeFormatted}</td><td>${entryFormatted}${entryDiffHtml}</td><td>${trackedEntryFormatted}</td><td class="${pnlClass}">${pnlSign}$${Math.abs(pnl).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td></tr>`;
+
+        mobileHtml += `
+          <div class="position-card">
+            <div class="position-card-header">
+              <div class="position-card-coin">
+                <span>${pos.coin}</span>
+                <span class="${directionClass}">${direction}</span>
+              </div>
+              <div class="position-card-pnl ${pnlClass}">${pnlSign}$${Math.abs(pnl).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
+            </div>
+            <div class="position-card-details">
+              <div class="position-card-row">
+                <span class="position-card-label">Size</span>
+                <span class="position-card-value">${sizeFormatted}</span>
+              </div>
+              <div class="position-card-row">
+                <span class="position-card-label">Entry</span>
+                <span class="position-card-value">${entryFormatted}</span>
+              </div>
+              <div class="position-card-row">
+                <span class="position-card-label">Tracked</span>
+                <span class="position-card-value">${trackedEntryFormatted}</span>
+              </div>
+              <div class="position-card-row">
+                <span class="position-card-label">Diff</span>
+                <span class="position-card-value">${entryDiffMobileHtml || '-'}</span>
+              </div>
+            </div>
+          </div>
+        `;
       }
 
-      html += '</tbody></table>';
-      container.innerHTML = html;
+      tableHtml += '</tbody></table>';
+      mobileHtml += '</div>';
+      container.innerHTML = tableHtml + mobileHtml;
     }
 
     function renderPositionAllocationChart() {
