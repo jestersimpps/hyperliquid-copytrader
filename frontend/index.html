@@ -446,6 +446,31 @@
       color: #e1e8ed;
     }
 
+    .dual-pie-container {
+      display: flex;
+      justify-content: center;
+      gap: 40px;
+      height: 100%;
+    }
+    .dual-pie-container canvas {
+      min-height: 200px;
+      max-height: 280px;
+    }
+    .pie-wrapper {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      flex: 1;
+      max-width: 280px;
+    }
+    .pie-label {
+      color: #8899a6;
+      font-size: 12px;
+      margin-top: 8px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
     .loading { text-align: center; padding: 50px; font-size: 1.5em; color: #8899a6; }
 
     .error {
@@ -720,7 +745,16 @@
       <div class="charts-row" id="position-charts-row" style="display: none;">
         <div class="chart-container" id="position-allocation-chart-container">
           <div class="chart-title">Position Allocation (% of Balance)</div>
-          <canvas id="position-allocation-chart"></canvas>
+          <div class="dual-pie-container">
+            <div class="pie-wrapper">
+              <canvas id="tracked-allocation-chart"></canvas>
+              <div class="pie-label">Tracked</div>
+            </div>
+            <div class="pie-wrapper">
+              <canvas id="user-allocation-chart"></canvas>
+              <div class="pie-label">User</div>
+            </div>
+          </div>
         </div>
         <div class="chart-container" id="position-size-chart-container">
           <div class="chart-title">Position Size (% of Balance)</div>
@@ -1844,17 +1878,24 @@
 
     function renderPositionAllocationChart() {
       const latest = filteredSnapshots[filteredSnapshots.length - 1];
-      const userPositions = latest.user.positions || [];
-      const accountValue = latest.user.accountValue || 1;
+      const trackedPositions = latest.tracked?.positions || [];
+      const userPositions = latest.user?.positions || [];
+      const trackedAccountValue = latest.tracked?.accountValue || 1;
+      const userAccountValue = latest.user?.accountValue || 1;
 
       const rowContainer = document.getElementById('position-charts-row');
-      if (userPositions.length === 0) {
+      if (trackedPositions.length === 0 && userPositions.length === 0) {
         rowContainer.style.display = 'none';
         return;
       }
       rowContainer.style.display = 'grid';
 
-      const positionData = userPositions.map(pos => ({
+      renderAllocationPie('tracked-allocation-chart', trackedPositions, trackedAccountValue);
+      renderAllocationPie('user-allocation-chart', userPositions, userAccountValue);
+    }
+
+    function renderAllocationPie(canvasId, positions, accountValue) {
+      const positionData = positions.map(pos => ({
         coin: pos.coin,
         pct: (Math.abs(pos.notionalValue || 0) / accountValue) * 100
       }));
@@ -1866,8 +1907,8 @@
       const data = [...positionData.map(p => p.pct), cashPct];
       const colors = [...positionData.map(p => getSymbolColor(p.coin)), '#38444d'];
 
-      if (chartInstances['position-allocation-chart']) chartInstances['position-allocation-chart'].destroy();
-      chartInstances['position-allocation-chart'] = new Chart(document.getElementById('position-allocation-chart').getContext('2d'), {
+      if (chartInstances[canvasId]) chartInstances[canvasId].destroy();
+      chartInstances[canvasId] = new Chart(document.getElementById(canvasId).getContext('2d'), {
         type: 'doughnut',
         data: {
           labels,
@@ -1882,16 +1923,7 @@
           responsive: true,
           maintainAspectRatio: false,
           plugins: {
-            legend: {
-              position: 'right',
-              labels: {
-                color: '#e1e8ed',
-                font: { size: 11 },
-                padding: 10,
-                usePointStyle: true,
-                pointStyle: 'circle'
-              }
-            },
+            legend: { display: false },
             tooltip: {
               backgroundColor: '#192734',
               titleColor: '#e1e8ed',
