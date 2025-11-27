@@ -446,39 +446,42 @@
       color: #e1e8ed;
     }
 
-    .dual-pie-container {
-      display: flex;
-      justify-content: center;
-      gap: 60px;
+    .allocation-cards-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      margin-bottom: 20px;
     }
-    .dual-pie-container canvas {
-      width: 180px !important;
-      height: 180px !important;
-    }
-    .pie-wrapper {
+    .allocation-card {
       display: flex;
       flex-direction: column;
       align-items: center;
     }
-    .pie-label {
-      color: #8899a6;
-      font-size: 12px;
-      margin-top: 10px;
-      text-transform: uppercase;
-      letter-spacing: 1px;
+    .allocation-card canvas {
+      min-height: unset !important;
+      max-height: unset !important;
+    }
+    .pie-center-wrapper {
+      display: flex;
+      justify-content: center;
+      width: 100%;
+    }
+    .pie-center-wrapper canvas {
+      width: 160px !important;
+      height: 160px !important;
     }
     .pie-legend {
       display: flex;
       flex-wrap: wrap;
       justify-content: center;
-      gap: 10px 16px;
-      margin-top: 16px;
+      gap: 8px 14px;
+      margin-top: 12px;
     }
     .pie-legend-item {
       display: flex;
       align-items: center;
       gap: 6px;
-      font-size: 12px;
+      font-size: 11px;
       color: #e1e8ed;
     }
     .pie-legend-color {
@@ -486,12 +489,8 @@
       height: 10px;
       border-radius: 50%;
     }
-    #position-allocation-chart-container {
-      overflow: visible;
-    }
-    #position-allocation-chart-container canvas {
-      min-height: unset;
-      max-height: unset;
+    @media (max-width: 768px) {
+      .allocation-cards-row { grid-template-columns: 1fr; }
     }
 
     .loading { text-align: center; padding: 50px; font-size: 1.5em; color: #8899a6; }
@@ -765,27 +764,29 @@
         </div>
       </div>
 
-      <div class="chart-container" id="position-allocation-chart-container" style="display: none;">
-        <div class="chart-title">Position Allocation (% of Balance)</div>
-        <div class="dual-pie-container">
-          <div class="pie-wrapper">
+      <div class="allocation-cards-row" id="allocation-cards-row" style="display: none;">
+        <div class="chart-container allocation-card">
+          <div class="chart-title">Tracked Allocation</div>
+          <div class="pie-center-wrapper">
             <canvas id="tracked-allocation-chart"></canvas>
-            <div class="pie-label">Tracked</div>
           </div>
-          <div class="pie-wrapper">
-            <canvas id="user-allocation-chart"></canvas>
-            <div class="pie-label">User</div>
-          </div>
+          <div class="pie-legend" id="tracked-allocation-legend"></div>
         </div>
-        <div class="pie-legend" id="allocation-legend"></div>
+        <div class="chart-container allocation-card">
+          <div class="chart-title">User Allocation</div>
+          <div class="pie-center-wrapper">
+            <canvas id="user-allocation-chart"></canvas>
+          </div>
+          <div class="pie-legend" id="user-allocation-legend"></div>
+        </div>
       </div>
+
+      <div class="fills-section" id="fills-section"></div>
 
       <div class="chart-container" id="position-size-chart-container" style="display: none;">
         <div class="chart-title">Position Size (% of Balance)</div>
         <canvas id="position-size-chart"></canvas>
       </div>
-
-      <div class="fills-section" id="fills-section"></div>
 
       <div class="positions-section">
         <div class="positions-title">Current Positions</div>
@@ -1906,31 +1907,18 @@
       const trackedAccountValue = latest.tracked?.accountValue || 1;
       const userAccountValue = latest.user?.accountValue || 1;
 
-      const allocationContainer = document.getElementById('position-allocation-chart-container');
+      const cardsRow = document.getElementById('allocation-cards-row');
       if (trackedPositions.length === 0 && userPositions.length === 0) {
-        allocationContainer.style.display = 'none';
+        cardsRow.style.display = 'none';
         return;
       }
-      allocationContainer.style.display = 'block';
+      cardsRow.style.display = 'grid';
 
-      renderAllocationPie('tracked-allocation-chart', trackedPositions, trackedAccountValue);
-      renderAllocationPie('user-allocation-chart', userPositions, userAccountValue);
-
-      const allCoins = new Set();
-      trackedPositions.forEach(p => allCoins.add(p.coin));
-      userPositions.forEach(p => allCoins.add(p.coin));
-      allCoins.add('Cash');
-
-      const legendContainer = document.getElementById('allocation-legend');
-      legendContainer.innerHTML = Array.from(allCoins).map(coin => `
-        <div class="pie-legend-item">
-          <div class="pie-legend-color" style="background: ${coin === 'Cash' ? '#38444d' : getSymbolColor(coin)}"></div>
-          <span>${coin}</span>
-        </div>
-      `).join('');
+      renderAllocationPie('tracked-allocation-chart', trackedPositions, trackedAccountValue, 'tracked-allocation-legend');
+      renderAllocationPie('user-allocation-chart', userPositions, userAccountValue, 'user-allocation-legend');
     }
 
-    function renderAllocationPie(canvasId, positions, accountValue) {
+    function renderAllocationPie(canvasId, positions, accountValue, legendId) {
       const positionData = positions.map(pos => ({
         coin: pos.coin,
         pct: (Math.abs(pos.notionalValue || 0) / accountValue) * 100
@@ -1971,6 +1959,14 @@
           }
         }
       });
+
+      const legendContainer = document.getElementById(legendId);
+      legendContainer.innerHTML = labels.map((label, i) => `
+        <div class="pie-legend-item">
+          <div class="pie-legend-color" style="background: ${colors[i]}"></div>
+          <span>${label}</span>
+        </div>
+      `).join('');
     }
 
     function renderPositionSizeChart() {
