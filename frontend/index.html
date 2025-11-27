@@ -215,6 +215,17 @@
       height: 80px !important;
     }
 
+    .allocation-pie-chart {
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .allocation-pie-chart canvas {
+      width: 100% !important;
+      height: 120px !important;
+    }
+
     .fills-section {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -1144,10 +1155,16 @@
           }
         }
 
-        const chartId = `entry-diff-mini-${summary.accountId}`;
+        const entryDiffChartId = `entry-diff-mini-${summary.accountId}`;
         let entryDiffHtml = '';
         if (entryDiffData.length > 0) {
-          entryDiffHtml = `<div class="entry-diff-mini-chart"><canvas id="${chartId}"></canvas></div>`;
+          entryDiffHtml = `<div class="entry-diff-mini-chart"><canvas id="${entryDiffChartId}"></canvas></div>`;
+        }
+
+        const pieChartId = `allocation-pie-${summary.accountId}`;
+        let pieChartHtml = '';
+        if (positions.length > 0) {
+          pieChartHtml = `<div class="allocation-pie-chart"><canvas id="${pieChartId}"></canvas></div>`;
         }
 
         card.innerHTML = `
@@ -1158,16 +1175,66 @@
           <div class="summary-card-balance">$${summary.balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
           <div class="summary-card-pnl ${pnlClass}">PnL: ${pnlSign}$${Math.abs(pnl).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
           <div class="summary-card-positions">${positions.length} open positions</div>
+          ${pieChartHtml}
           ${positionsHtml}
           ${entryDiffHtml}
         `;
 
         container.appendChild(card);
 
+        if (positions.length > 0) {
+          renderAllocationPieChart(pieChartId, positions, summary.balance);
+        }
+
         if (entryDiffData.length > 0) {
-          renderEntryDiffMiniChart(chartId, entryDiffData);
+          renderEntryDiffMiniChart(entryDiffChartId, entryDiffData);
         }
       }
+    }
+
+    function renderAllocationPieChart(chartId, positions, accountBalance) {
+      const ctx = document.getElementById(chartId);
+      if (!ctx) return;
+
+      const positionData = positions.map(pos => ({
+        coin: pos.coin,
+        pct: (Math.abs(pos.notionalValue || 0) / accountBalance) * 100
+      }));
+
+      const totalPositionPct = positionData.reduce((sum, p) => sum + p.pct, 0);
+      const cashPct = Math.max(0, 100 - totalPositionPct);
+
+      const labels = [...positionData.map(p => p.coin), 'Cash'];
+      const data = [...positionData.map(p => p.pct), cashPct];
+      const colors = [...positionData.map(p => getSymbolColor(p.coin)), '#38444d'];
+
+      new Chart(ctx.getContext('2d'), {
+        type: 'doughnut',
+        data: {
+          labels,
+          datasets: [{
+            data,
+            backgroundColor: colors,
+            borderColor: '#1a1a2e',
+            borderWidth: 2
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              backgroundColor: '#192734',
+              titleColor: '#e1e8ed',
+              bodyColor: '#8899a6',
+              callbacks: {
+                label: ctx => `${ctx.label}: ${ctx.parsed.toFixed(1)}%`
+              }
+            }
+          }
+        }
+      });
     }
 
     function renderEntryDiffMiniChart(chartId, entryDiffData) {
