@@ -992,11 +992,16 @@ h1 {
 
 .live-trade-row {
   display: grid;
-  grid-template-columns: 28px 42px 48px 50px 50px;
-  gap: 6px;
+  grid-template-columns: 58px 24px 38px 48px 46px 46px;
+  gap: 4px;
   padding: 4px 0;
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
   align-items: center;
+}
+
+.trade-time {
+  color: #657786;
+  font-size: 0.85em;
 }
 
 .live-trade-row:last-child { border-bottom: none; }

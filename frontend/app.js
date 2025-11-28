@@ -574,10 +574,13 @@ function renderSummaryLiveTrades(isNew = false) {
     const pnlClass = pnl > 0 ? 'positive' : pnl < 0 ? 'negative' : 'neutral';
     const pnlStr = hasClosedPnl ? (pnl >= 0 ? '+' : '') + '$' + Math.abs(pnl).toFixed(0) : '-';
 
+    const time = new Date(trade.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
     const newClass = isNew && idx === 0 ? 'new' : '';
 
     return `
       <div class="live-trade-row ${newClass}">
+        <span class="trade-time">${time}</span>
         <span class="trade-account">${trade.accountName}</span>
         <span class="trade-symbol">${trade.coin}</span>
         <span class="trade-type ${typeClass}">${typeText}</span>
