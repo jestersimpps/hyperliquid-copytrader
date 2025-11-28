@@ -1,102 +1,42 @@
 # CopyScalper
 
-A high-performance copy trading bot for Hyperliquid DEX that automatically mirrors trades from a tracked wallet in real-time.
+A high-performance copy trading bot for Hyperliquid DEX with real-time dashboard.
+
+![Dashboard](screenshot.png)
 
 ## Features
 
-- **Real-time fill detection** via WebSocket
-- **Automatic trade execution** with intelligent position sizing
-- **Smart order validation** - ensures all orders meet $10 minimum
-- **Balance ratio scaling** - automatically scales positions based on portfolio size
-- **Direct price matching** - uses tracked wallet's exact fill price
+- **Real-time copy trading** via WebSocket fill detection
+- **Multi-account support** with independent tracking
+- **Smart position sizing** based on balance ratios
+- **Position drift sync** to maintain alignment with tracked wallets
+- **Web dashboard** with live metrics, charts, and activity heatmap
 - **Telegram notifications** (optional)
 
 ## Quick Start
 
-### Installation
-
 ```bash
 npm install
-```
-
-### Configuration
-
-Create a `.env` file:
-
-```env
-# Required
-TRACKED_WALLET=0x1234567890123456789012345678901234567890
-USER_WALLET=0xabcdefabcdefabcdefabcdefabcdefabcdefabcd
-PRIVATE_KEY=0x1234567890123456789012345678901234567890123456789012345678901234
-
-# Optional
-MIN_ORDER_VALUE=10
-IS_TESTNET=false
-TELEGRAM_BOT_TOKEN=123456789:ABCdefGHIjklMNOpqrsTUVwxyz
-TELEGRAM_CHAT_ID=123456789
-```
-
-### Usage
-
-```bash
+cp .env.example .env  # Configure your wallets and keys
 npm start
 ```
 
-The bot will:
-1. Connect to Hyperliquid via WebSocket
-2. Subscribe to tracked wallet's fills in real-time
-3. Automatically execute trades when tracked wallet trades
-4. Update balance ratios every minute
+## Dashboard
 
-Stop with `Ctrl+C`
+Access at `http://localhost:3000` - includes:
+- Combined balance history across accounts
+- Real-time P&L tracking (realized/unrealized)
+- Position allocation pie charts
+- 24h trading activity heatmap
+- Risk metrics (margin, drawdown, leverage)
 
-## How It Works
+## Configuration
 
-### Position Scaling
-
-All trades are automatically scaled to match your portfolio size:
-
-```
-Balance Ratio = Your Account Value / Tracked Account Value
-Your Position Size = Tracked Position Size × Balance Ratio
-```
-
-**Example:**
-- Tracked wallet buys 1000 STRK
-- Your account: $12,000
-- Their account: $25,431
-- Balance ratio: 0.4718
-- Your trade: Buy 471.8 STRK
-
-### Smart Order Validation
-
-- Ensures all orders meet $10 minimum value
-- Auto-adjusts size if needed (rounds up using Math.ceil)
-- Validates using base fill price (without slippage)
-- Adds 0.5% slippage for execution
-
-## Performance
-
-**Execution time:** ~1.4s from fill detection to order placement
-- Network latency to Hyperliquid: ~1.3-1.4s
-- Code execution: ~10-50ms
-
-**Tip:** For best performance, host near Tokyo, Japan (where Hyperliquid validators are located)
-
-## Telegram Setup (Optional)
-
-1. Message [@BotFather](https://t.me/BotFather) → `/newbot` → copy token
-2. Message [@userinfobot](https://t.me/userinfobot) → copy chat ID
-3. Add to `.env`
-
-**Commands:**
-- `/status` - View current monitoring statistics
-- `/start` - Show help message
-
-## Development
-
-```bash
-npm run build
+```env
+TRACKED_WALLET=0x...
+USER_WALLET=0x...
+PRIVATE_KEY=0x...
+MIN_ORDER_VALUE=10
 ```
 
 ## License
