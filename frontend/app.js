@@ -14,6 +14,11 @@ let trackedFillsList = [];
 let userFillsList = [];
 let trackedPingInterval = null;
 let userPingInterval = null;
+let summaryWsConnections = [];
+let summaryLiveTrades = [];
+let summaryPingIntervals = [];
+let soundEnabled = false;
+let fillSound = null;
 
 const SYMBOL_COLORS = [
   '#667eea', '#17bf63', '#e0245e', '#ffad1f', '#1da1f2', '#f91880',
@@ -97,11 +102,14 @@ async function selectAccount(accountId) {
 
   currentAccountId = accountId;
   cleanupFillsWebSockets();
+  cleanupSummaryWebSockets();
 
   if (accountId === 'summary') {
     document.getElementById('summary-view').style.display = 'block';
     document.getElementById('account-view').style.display = 'none';
     await loadSummaryView();
+    initSoundToggle();
+    subscribeToSummaryFills();
   } else {
     document.getElementById('summary-view').style.display = 'none';
     document.getElementById('account-view').style.display = 'block';
@@ -340,6 +348,246 @@ function cleanupFillsWebSockets() {
   userFillsList = [];
 }
 
+function cleanupSummaryWebSockets() {
+  for (const interval of summaryPingIntervals) {
+    clearInterval(interval);
+  }
+  summaryPingIntervals = [];
+  for (const ws of summaryWsConnections) {
+    ws.onclose = null;
+    ws.close();
+  }
+  summaryWsConnections = [];
+}
+
+function initFillSound() {
+  if (!fillSound) {
+    fillSound = new Audio('mixkit-modern-technology-select-3124.wav');
+    fillSound.volume = 0.3;
+  }
+}
+
+function playFillSound() {
+  if (soundEnabled && fillSound) {
+    fillSound.currentTime = 0;
+    fillSound.play().catch(() => {});
+  }
+}
+
+function toggleSound() {
+  soundEnabled = !soundEnabled;
+  const btn = document.getElementById('sound-toggle');
+  const onIcon = btn.querySelector('.sound-on');
+  const offIcon = btn.querySelector('.sound-off');
+
+  if (soundEnabled) {
+    btn.classList.add('active');
+    onIcon.style.display = 'block';
+    offIcon.style.display = 'none';
+    initFillSound();
+  } else {
+    btn.classList.remove('active');
+    onIcon.style.display = 'none';
+    offIcon.style.display = 'block';
+  }
+
+  localStorage.setItem('fillSoundEnabled', soundEnabled);
+}
+
+function initSoundToggle() {
+  const saved = localStorage.getItem('fillSoundEnabled');
+  if (saved === 'true') {
+    soundEnabled = true;
+    initFillSound();
+    const btn = document.getElementById('sound-toggle');
+    if (btn) {
+      btn.classList.add('active');
+      btn.querySelector('.sound-on').style.display = 'block';
+      btn.querySelector('.sound-off').style.display = 'none';
+    }
+  }
+
+  const btn = document.getElementById('sound-toggle');
+  if (btn) {
+    btn.addEventListener('click', toggleSound);
+  }
+}
+
+function subscribeToSummaryFills() {
+  cleanupSummaryWebSockets();
+  summaryLiveTrades = [];
+
+  const listEl = document.getElementById('summary-live-trades');
+  if (listEl) {
+    listEl.innerHTML = '<div class="no-trades">Connecting...</div>';
+  }
+
+  for (const account of accounts) {
+    if (!account.userWallet) continue;
+
+    const ws = new WebSocket('wss://api.hyperliquid.xyz/ws');
+
+    ws.onopen = () => {
+      ws.send(JSON.stringify({
+        method: 'subscribe',
+        subscription: { type: 'userFills', user: account.userWallet }
+      }));
+
+      const pingInterval = setInterval(() => {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ method: 'ping' }));
+        }
+      }, 30000);
+      summaryPingIntervals.push(pingInterval);
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const msg = JSON.parse(event.data);
+        if (msg.channel === 'pong') return;
+
+        if (msg.channel === 'userFills' && msg.data) {
+          const isSnapshot = msg.data.isSnapshot;
+
+          if (isSnapshot && Array.isArray(msg.data.fills)) {
+            const recentFills = msg.data.fills
+              .sort((a, b) => b.time - a.time)
+              .slice(0, 10)
+              .map(f => ({ ...f, accountId: account.id, accountName: account.name }));
+            summaryLiveTrades = [...summaryLiveTrades, ...recentFills]
+              .sort((a, b) => b.time - a.time)
+              .slice(0, 20);
+            renderSummaryLiveTrades(false);
+          } else if (!isSnapshot) {
+            const newFills = Array.isArray(msg.data) ? msg.data : (msg.data.fills || []);
+            for (const fill of newFills) {
+              summaryLiveTrades.unshift({ ...fill, accountId: account.id, accountName: account.name });
+              if (summaryLiveTrades.length > 20) summaryLiveTrades.pop();
+              playFillSound();
+            }
+            renderSummaryLiveTrades(true);
+          }
+        }
+      } catch (e) {
+        console.error('Failed to parse summary fills:', e);
+      }
+    };
+
+    ws.onclose = () => {
+      if (currentAccountId === 'summary') {
+        setTimeout(() => {
+          if (currentAccountId === 'summary') {
+            const idx = summaryWsConnections.indexOf(ws);
+            if (idx > -1) {
+              summaryWsConnections.splice(idx, 1);
+              subscribeToAccountFills(account);
+            }
+          }
+        }, 3000);
+      }
+    };
+
+    summaryWsConnections.push(ws);
+  }
+}
+
+function subscribeToAccountFills(account) {
+  if (!account.userWallet || currentAccountId !== 'summary') return;
+
+  const ws = new WebSocket('wss://api.hyperliquid.xyz/ws');
+
+  ws.onopen = () => {
+    ws.send(JSON.stringify({
+      method: 'subscribe',
+      subscription: { type: 'userFills', user: account.userWallet }
+    }));
+
+    const pingInterval = setInterval(() => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ method: 'ping' }));
+      }
+    }, 30000);
+    summaryPingIntervals.push(pingInterval);
+  };
+
+  ws.onmessage = (event) => {
+    try {
+      const msg = JSON.parse(event.data);
+      if (msg.channel === 'pong') return;
+
+      if (msg.channel === 'userFills' && msg.data && !msg.data.isSnapshot) {
+        const newFills = Array.isArray(msg.data) ? msg.data : (msg.data.fills || []);
+        for (const fill of newFills) {
+          summaryLiveTrades.unshift({ ...fill, accountId: account.id, accountName: account.name });
+          if (summaryLiveTrades.length > 20) summaryLiveTrades.pop();
+          playFillSound();
+        }
+        renderSummaryLiveTrades(true);
+      }
+    } catch (e) {}
+  };
+
+  ws.onclose = () => {
+    if (currentAccountId === 'summary') {
+      setTimeout(() => {
+        if (currentAccountId === 'summary') {
+          subscribeToAccountFills(account);
+        }
+      }, 3000);
+    }
+  };
+
+  summaryWsConnections.push(ws);
+}
+
+function renderSummaryLiveTrades(isNew = false) {
+  const listEl = document.getElementById('summary-live-trades');
+  if (!listEl) return;
+
+  if (summaryLiveTrades.length === 0) {
+    listEl.innerHTML = '<div class="no-trades">No recent trades</div>';
+    return;
+  }
+
+  listEl.innerHTML = summaryLiveTrades.map((trade, idx) => {
+    const isBuy = trade.side === 'B';
+    const hasClosedPnl = trade.closedPnl && parseFloat(trade.closedPnl) !== 0;
+    const pnl = hasClosedPnl ? parseFloat(trade.closedPnl) : 0;
+
+    let typeClass, typeText;
+    if (hasClosedPnl) {
+      typeClass = 'close';
+      typeText = 'CLOSE';
+    } else if (isBuy) {
+      typeClass = 'open-long';
+      typeText = 'LONG';
+    } else {
+      typeClass = 'open-short';
+      typeText = 'SHORT';
+    }
+
+    const size = parseFloat(trade.sz || 0);
+    const price = parseFloat(trade.px || 0);
+    const notional = size * price;
+    const sizeStr = notional >= 1000 ? `$${(notional / 1000).toFixed(1)}k` : `$${notional.toFixed(0)}`;
+
+    const pnlClass = pnl > 0 ? 'positive' : pnl < 0 ? 'negative' : 'neutral';
+    const pnlStr = hasClosedPnl ? (pnl >= 0 ? '+' : '') + '$' + Math.abs(pnl).toFixed(0) : '-';
+
+    const newClass = isNew && idx === 0 ? 'new' : '';
+
+    return `
+      <div class="live-trade-row ${newClass}">
+        <span class="trade-account">${trade.accountName}</span>
+        <span class="trade-symbol">${trade.coin}</span>
+        <span class="trade-type ${typeClass}">${typeText}</span>
+        <span class="trade-size">${sizeStr}</span>
+        <span class="trade-pnl ${pnlClass}">${pnlStr}</span>
+      </div>
+    `;
+  }).join('');
+}
+
 function renderActivityHeatmap(trades) {
   const container = document.getElementById('activity-heatmap');
   const timeAxis = document.getElementById('heatmap-time-axis');
@@ -560,6 +808,8 @@ async function loadSummaryView() {
 
     document.getElementById('total-balance').textContent =
       `$${totalRealizedBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    document.getElementById('total-balance-with-pnl').textContent =
+      `$${totalBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     document.getElementById('total-tpm').textContent = tpm;
 
     const allHistoryPoints = Object.values(allBalanceHistory).flat();
