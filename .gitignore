@@ -4,3 +4,4 @@ dist/
 accounts.json
 data/
 logs/
+.claude/
