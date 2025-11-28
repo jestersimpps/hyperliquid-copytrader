@@ -107,32 +107,26 @@ export class FillProcessorService {
     const scaledTradeSize = formatScaledSize(scaleSize(tradeSize, this.balanceRatio))
     const scaledFinalSize = formatScaledSize(scaleSize(Math.abs(finalPosition), this.balanceRatio))
 
-    const orderValue = scaledTradeSize * price
     const isClose = prevPosition !== 0 && finalPosition === 0
     const isReduce = Math.abs(finalPosition) < Math.abs(prevPosition) && finalPosition !== 0
+    const isOpen = prevPosition === 0 && finalPosition !== 0
+
+    const baseSize = isOpen ? scaledFinalSize : scaledTradeSize
+    const orderValue = baseSize * price
+    const elevatedSize = orderValue < this.minOrderValue
+      ? formatScaledSize(this.minOrderValue / price)
+      : baseSize
 
     if (orderValue < this.minOrderValue) {
-      if (isClose || isReduce) {
-        const elevatedSize = formatScaledSize(this.minOrderValue / price)
-        console.log(`   [${this.accountId}] ⬆️ Elevating close/reduce from $${orderValue.toFixed(2)} to $${this.minOrderValue} (size: ${scaledTradeSize} → ${elevatedSize})`)
-        return {
-          action: isClose ? 'close' : 'reduce',
-          coin: fill.coin,
-          side: prevSide,
-          size: elevatedSize,
-          reason: `${isClose ? 'Close' : 'Reduce'} ${prevSide.toUpperCase()} @ $${price.toFixed(2)} (elevated)`
-        }
-      }
-      console.log(`   [${this.accountId}] ⚠️ Order value $${orderValue.toFixed(2)} below min $${this.minOrderValue}, skipping`)
-      return null
+      console.log(`   [${this.accountId}] ⬆️ Elevating order from $${orderValue.toFixed(2)} to $${this.minOrderValue} (size: ${baseSize} → ${elevatedSize})`)
     }
 
-    if (prevPosition === 0 && finalPosition !== 0) {
+    if (isOpen) {
       return {
         action: 'open',
         coin: fill.coin,
         side: newSide,
-        size: scaledFinalSize,
+        size: elevatedSize,
         reason: `Open ${newSide.toUpperCase()} @ $${price.toFixed(2)}`
       }
     }
@@ -142,7 +136,7 @@ export class FillProcessorService {
         action: 'close',
         coin: fill.coin,
         side: prevSide,
-        size: scaledTradeSize,
+        size: elevatedSize,
         reason: `Close ${prevSide.toUpperCase()} @ $${price.toFixed(2)}`
       }
     }
@@ -162,7 +156,7 @@ export class FillProcessorService {
         action: 'add',
         coin: fill.coin,
         side: newSide,
-        size: scaledTradeSize,
+        size: elevatedSize,
         reason: `Add to ${newSide.toUpperCase()} @ $${price.toFixed(2)}`
       }
     }
@@ -172,7 +166,7 @@ export class FillProcessorService {
         action: 'reduce',
         coin: fill.coin,
         side: prevSide,
-        size: scaledTradeSize,
+        size: elevatedSize,
         reason: `Reduce ${prevSide.toUpperCase()} @ $${price.toFixed(2)}`
       }
     }
