@@ -920,7 +920,7 @@ function renderAccountsSummaryGrid(accountSummaries) {
         <div class="summary-card-mini-chart"><canvas id="${historyChartId}"></canvas></div>
         <div class="summary-card-info">
           <div class="summary-card-header">
-            <span class="summary-card-name">${summary.name}</span>
+            <a class="summary-card-name" href="https://hyperformance.xyz/trade?${summary.trackedWallet}" target="_blank" onclick="event.stopPropagation()">${summary.name}</a>
             <span class="summary-card-status ${statusClass}">${statusText}</span>
           </div>
           <div class="summary-card-balance">$${realizedBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>

@@ -140,7 +140,12 @@ h1 {
 .summary-card-name {
   font-size: 0.9em;
   font-weight: 600;
-  color: #e1e8ed;
+  color: #667eea;
+  text-decoration: none;
+}
+
+.summary-card-name:hover {
+  text-decoration: underline;
 }
 
 .summary-card-status {

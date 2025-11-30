@@ -391,6 +391,7 @@ interface PositionSummary {
 interface AccountSummary {
   accountId: string
   name: string
+  trackedWallet: string
   balance: number
   unrealizedPnl: number
   positions: PositionSummary[]
@@ -447,9 +448,11 @@ app.get('/api/summary', async (req: Request, res: Response) => {
           leverage: p.leverage
         })) || []
         const unrealizedPnl = positions.reduce((sum, p) => sum + p.unrealizedPnl, 0)
+        const configAccount = globalConfig.accounts.find(a => a.id === accountId)
         summaries.push({
           accountId,
           name: ctx.state.name,
+          trackedWallet: configAccount?.trackedWallet || '',
           balance: snapshot ? parseFloat(snapshot.userBalance.accountValue) : 0,
           unrealizedPnl,
           positions,
@@ -498,6 +501,7 @@ app.get('/api/summary', async (req: Request, res: Response) => {
         summaries.push({
           accountId: account.id,
           name: account.name,
+          trackedWallet: account.trackedWallet,
           balance,
           unrealizedPnl,
           positions,
