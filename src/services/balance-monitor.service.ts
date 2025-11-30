@@ -83,7 +83,7 @@ export class BalanceMonitorService {
 
       console.log(`\n[${this.accountId}] 📊 Balance | Tracked: $${trackedValue.toFixed(2)} (${trackedPositions.length} pos) | User: $${userValue.toFixed(2)} (${userPositions.length} pos) | Ratio: ${balanceRatio.toFixed(4)}`)
 
-      const driftReport = this.driftDetector.detect(trackedPositions, userPositions, balanceRatio)
+      const driftReport = this.driftDetector.detect(trackedPositions, userPositions, trackedValue, userValue)
 
       if (driftReport.hasDrift) {
         console.log(`\n[${this.accountId}] ⚠️  Drift detected: ${driftReport.drifts.length} position(s)`)
