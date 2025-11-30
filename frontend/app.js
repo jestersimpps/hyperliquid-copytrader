@@ -1003,7 +1003,7 @@ function renderCombinedBalanceChart() {
       }
     }
 
-    if (Object.keys(lastKnownBalances).length === accountCount) {
+    if (Object.keys(lastKnownBalances).length > 0) {
       const total = Object.values(lastKnownBalances).reduce((sum, b) => sum + b, 0);
       aggregatedData.push({ x: new Date(bucket.timestamp), y: total });
     }
