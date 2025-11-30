@@ -963,8 +963,12 @@ function renderAccountMiniChart(chartId, accountId) {
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      layout: { padding: { bottom: 0, top: 0, left: 0, right: 0 } },
       plugins: { legend: { display: false }, tooltip: { enabled: false } },
-      scales: { x: { display: false }, y: { display: false } }
+      scales: {
+        x: { display: false },
+        y: { display: false, grace: 0 }
+      }
     }
   });
 }

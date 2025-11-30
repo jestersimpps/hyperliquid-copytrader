@@ -107,6 +107,7 @@ h1 {
 .summary-card-top {
   position: relative;
   min-height: 80px;
+  margin-bottom: 0;
 }
 
 .summary-card-info {
