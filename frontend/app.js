@@ -910,6 +910,7 @@ function renderAccountsSummaryGrid(accountSummaries) {
 
     card.innerHTML = `
       <div class="summary-card-top">
+        <div class="summary-card-mini-chart"><canvas id="${historyChartId}"></canvas></div>
         <div class="summary-card-info">
           <div class="summary-card-header">
             <span class="summary-card-name">${summary.name}</span>
@@ -919,7 +920,6 @@ function renderAccountsSummaryGrid(accountSummaries) {
           <div class="summary-card-pnl ${pnlClass}">Unrealized: ${pnlSign}$${Math.abs(pnl).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
           <div class="summary-card-positions">${positions.length} open positions · ${accountTpm} trades/min</div>
         </div>
-        <div class="summary-card-mini-chart"><canvas id="${historyChartId}"></canvas></div>
       </div>
       ${contentHtml}
     `;

@@ -105,25 +105,28 @@ h1 {
 }
 
 .summary-card-top {
-  display: flex;
-  gap: 12px;
-  align-items: flex-start;
+  position: relative;
+  min-height: 80px;
 }
 
 .summary-card-info {
-  flex: 1;
-  min-width: 0;
+  position: relative;
+  z-index: 2;
 }
 
 .summary-card-mini-chart {
-  width: 100px;
-  height: 50px;
-  flex-shrink: 0;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 80px;
+  z-index: 1;
+  opacity: 0.4;
 }
 
 .summary-card-mini-chart canvas {
-  width: 100px !important;
-  height: 50px !important;
+  width: 100% !important;
+  height: 80px !important;
 }
 
 .summary-card-header {
