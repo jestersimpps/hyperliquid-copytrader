@@ -121,7 +121,7 @@ h1 {
   right: 0;
   height: 80px;
   z-index: 1;
-  opacity: 0.4;
+  opacity: 0.6;
 }
 
 .summary-card-mini-chart canvas {
@@ -131,8 +131,8 @@ h1 {
 
 .summary-card-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  gap: 8px;
   margin-bottom: 8px;
 }
 

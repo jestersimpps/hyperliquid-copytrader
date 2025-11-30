@@ -918,7 +918,7 @@ function renderAccountsSummaryGrid(accountSummaries) {
           </div>
           <div class="summary-card-balance">$${realizedBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
           <div class="summary-card-pnl ${pnlClass}">Unrealized: ${pnlSign}$${Math.abs(pnl).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-          <div class="summary-card-positions">${positions.length} open positions · ${accountTpm} trades/min</div>
+          <div class="summary-card-positions">${positions.length} positions · ${accountTpm} tpm</div>
         </div>
       </div>
       ${contentHtml}
