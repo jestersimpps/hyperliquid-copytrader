@@ -974,29 +974,34 @@ function renderAllocationPieChart(chartId, positions, accountBalance) {
 function renderCombinedBalanceChart() {
   if (chartInstances['combined-balance-chart']) chartInstances['combined-balance-chart'].destroy();
 
-  const datasets = [];
-  let index = 0;
+  const timestampMap = new Map();
 
   for (const [accountId, history] of Object.entries(allBalanceHistory)) {
-    if (history.length === 0) continue;
-
-    const account = accounts.find(a => a.id === accountId);
-    const accountName = account ? account.name : accountId;
-    const color = getAccountColor(index);
-
-    datasets.push({
-      label: accountName,
-      data: history.map(h => ({ x: new Date(h.timestamp), y: h.balance })),
-      borderColor: color,
-      backgroundColor: color + '20',
-      borderWidth: 2,
-      tension: 0.1,
-      pointRadius: 0,
-      fill: false
-    });
-
-    index++;
+    for (const h of history) {
+      const ts = h.timestamp;
+      if (!timestampMap.has(ts)) {
+        timestampMap.set(ts, { timestamp: ts, total: 0 });
+      }
+      timestampMap.get(ts).total += h.balance || 0;
+    }
   }
+
+  const aggregatedData = Array.from(timestampMap.values())
+    .sort((a, b) => a.timestamp - b.timestamp)
+    .map(d => ({ x: new Date(d.timestamp), y: d.total }));
+
+  if (aggregatedData.length === 0) return;
+
+  const datasets = [{
+    label: 'Total Balance',
+    data: aggregatedData,
+    borderColor: '#00d4ff',
+    backgroundColor: 'rgba(0, 212, 255, 0.15)',
+    borderWidth: 2,
+    tension: 0.1,
+    pointRadius: 0,
+    fill: true
+  }];
 
   chartInstances['combined-balance-chart'] = new Chart(document.getElementById('combined-balance-chart').getContext('2d'), {
     type: 'line',
@@ -1006,13 +1011,13 @@ function renderCombinedBalanceChart() {
       maintainAspectRatio: false,
       interaction: { mode: 'index', intersect: false },
       plugins: {
-        legend: { position: 'bottom', labels: { color: '#e1e8ed' } },
+        legend: { display: false },
         tooltip: {
           backgroundColor: '#192734',
           titleColor: '#e1e8ed',
           bodyColor: '#8899a6',
           callbacks: {
-            label: ctx => `${ctx.dataset.label}: $${ctx.parsed.y.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+            label: ctx => `Total: $${ctx.parsed.y.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
           }
         }
       },
