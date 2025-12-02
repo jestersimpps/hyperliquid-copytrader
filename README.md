@@ -28,17 +28,19 @@ Edit `accounts.json`:
 ```json
 {
   "privateKey": "0x...",
+  "isTestnet": false,
+  "globalMinOrderValue": 11,
+  "globalDriftThresholdPercent": 1,
+  "telegram": {
+    "botToken": "your-telegram-bot-token",
+    "chatId": "your-chat-id",
+    "polling": true
+  },
+  "dashboardPort": 3000,
   "accounts": [
     {
-      "id": "main",
-      "name": "Main Account",
-      "trackedWallet": "0x...",
-      "userWallet": "0x...",
-      "enabled": true
-    },
-    {
-      "id": "sub1",
-      "name": "Subaccount 1",
+      "id": "A",
+      "name": "Trader 1",
       "trackedWallet": "0x...",
       "userWallet": "0x...",
       "vaultAddress": "0x...",
