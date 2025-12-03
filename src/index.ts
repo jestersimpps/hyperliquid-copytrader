@@ -60,7 +60,8 @@ async function main(): Promise<void> {
       id: accountId,
       name: accountConfig.name,
       tradingPaused: false,
-      hrefModeEnabled: false
+      hrefModeEnabled: false,
+      pausedSymbols: new Map()
     }
 
     const loggerService = new LoggerService(accountId)

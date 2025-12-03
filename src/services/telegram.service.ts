@@ -473,16 +473,17 @@ export class TelegramService {
         source: 'telegram'
       })
 
-      state.tradingPaused = true
-      const resumeTime = new Date(Date.now() + 4 * 60 * 60 * 1000)
+      const pauseUntil = Date.now() + 4 * 60 * 60 * 1000
+      state.pausedSymbols.set(coin, pauseUntil)
+      const resumeTime = new Date(pauseUntil)
       const timeStr = resumeTime.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
 
-      await this.sendMessage(`✅ [${data.config.name}] Closed ${coin}\n⏸️ Trading paused until ${timeStr}`)
+      await this.sendMessage(`✅ [${data.config.name}] Closed ${coin}\n⏸️ ${coin} trading paused until ${timeStr}`)
 
       setTimeout(() => {
-        if (state.tradingPaused) {
-          state.tradingPaused = false
-          this.sendMessage(`▶️ [${data.config.name}] Trading auto-resumed after 4 hours`)
+        if (state.pausedSymbols.get(coin) === pauseUntil) {
+          state.pausedSymbols.delete(coin)
+          this.sendMessage(`▶️ [${data.config.name}] ${coin} trading auto-resumed after 4 hours`)
         }
       }, 4 * 60 * 60 * 1000)
     } catch (error) {

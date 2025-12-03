@@ -57,6 +57,15 @@ export class FillProcessorService {
       return
     }
 
+    const pausedUntil = this.accountState.pausedSymbols.get(fill.coin)
+    if (pausedUntil && Date.now() < pausedUntil) {
+      const remaining = Math.ceil((pausedUntil - Date.now()) / 60000)
+      console.log(`   [${this.accountId}] ⏸️ ${fill.coin} paused for ${remaining} more minutes, skipping`)
+      return
+    } else if (pausedUntil) {
+      this.accountState.pausedSymbols.delete(fill.coin)
+    }
+
     if (this.accountState.hrefModeEnabled) {
       const entryActions: TradeAction[] = ['open', 'add', 'reverse']
       if (entryActions.includes(action.action)) {

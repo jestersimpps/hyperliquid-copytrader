@@ -30,6 +30,7 @@ export interface SubAccountState {
   name: string
   tradingPaused: boolean
   hrefModeEnabled: boolean
+  pausedSymbols: Map<string, number>
 }
 
 export interface AccountContext {
