@@ -520,10 +520,13 @@ export class TelegramService {
     if (!this.enabled) return
     const data = this.accountSnapshots.get(accountId)
     const name = data?.config.name || accountId
+    const vaultAddress = data?.config.vaultAddress || ''
     const sign = pnl >= 0 ? '+' : ''
+    const tradeLink = vaultAddress ? `\n\n[View on Hyperformance](https://hyperformance.xyz/trade?${vaultAddress})` : ''
     await this.sendMessage(
       `⚠️ *[${name}] High Unrealized PnL*\n\n` +
-      `Total PnL: ${sign}$${pnl.toFixed(2)} (${pnlPercent.toFixed(1)}% of balance)`
+      `Total PnL: ${sign}$${pnl.toFixed(2)} (${pnlPercent.toFixed(1)}% of balance)` +
+      tradeLink
     )
   }
 
@@ -531,10 +534,13 @@ export class TelegramService {
     if (!this.enabled) return
     const data = this.accountSnapshots.get(accountId)
     const name = data?.config.name || accountId
+    const vaultAddress = data?.config.vaultAddress || ''
+    const tradeLink = vaultAddress ? `\n\n[View on Hyperformance](https://hyperformance.xyz/trade?${vaultAddress})` : ''
     await this.sendMessage(
       `⚠️ *[${name}] Large Position Size*\n\n` +
       `${coin} position is ${sizePercent.toFixed(1)}% of account value\n` +
-      `Size: $${notionalValue.toLocaleString('en-US', { maximumFractionDigits: 0 })}`
+      `Size: $${notionalValue.toLocaleString('en-US', { maximumFractionDigits: 0 })}` +
+      tradeLink
     )
   }
 
@@ -542,10 +548,13 @@ export class TelegramService {
     if (!this.enabled) return
     const data = this.accountSnapshots.get(accountId)
     const name = data?.config.name || accountId
+    const vaultAddress = data?.config.vaultAddress || ''
     const sign = pnl >= 0 ? '+' : ''
+    const tradeLink = vaultAddress ? `\n\n[View on Hyperformance](https://hyperformance.xyz/trade?${vaultAddress})` : ''
     await this.sendMessage(
       `⚠️ *[${name}] High Position PnL*\n\n` +
-      `${coin} position PnL: ${sign}$${pnl.toFixed(2)} (${pnlPercent.toFixed(1)}% of balance)`
+      `${coin} position PnL: ${sign}$${pnl.toFixed(2)} (${pnlPercent.toFixed(1)}% of balance)` +
+      tradeLink
     )
   }
 
