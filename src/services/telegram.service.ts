@@ -155,8 +155,8 @@ export class TelegramService {
           }
           break
 
-        case 'closeall':
-          await this.closeAllPositions(accountId)
+        case 'closeall4h':
+          await this.closeAllPositionsAndPause(accountId)
           break
 
         case 'pause4h':
@@ -219,16 +219,16 @@ export class TelegramService {
     if (data.snapshot && data.snapshot.userPositions.length > 0) {
       for (const pos of data.snapshot.userPositions) {
         const pnlSign = pos.unrealizedPnl >= 0 ? '+' : ''
-        const label = `❌ ${pos.coin} ${pnlSign}$${pos.unrealizedPnl.toFixed(0)}`
+        const label = `❌ Close 100% ${pos.coin} (${pnlSign}$${pos.unrealizedPnl.toFixed(0)})`
         keyboard.push([{ text: label, callback_data: `close:${accountId}:${pos.coin}:100` }])
         keyboard.push([
-          { text: '50%', callback_data: `close:${accountId}:${pos.coin}:50` },
-          { text: '25%', callback_data: `close:${accountId}:${pos.coin}:25` }
+          { text: 'Close 50%', callback_data: `close:${accountId}:${pos.coin}:50` },
+          { text: 'Close 25%', callback_data: `close:${accountId}:${pos.coin}:25` }
         ])
       }
       keyboard.push([
-        { text: '🔴 Close All', callback_data: `closeall:${accountId}` },
-        { text: '⏸️ Stop 4h', callback_data: `pause4h:${accountId}` }
+        { text: '🔴 Close All & Pause 4h', callback_data: `closeall4h:${accountId}` },
+        { text: '⏸️ Pause 4h', callback_data: `pause4h:${accountId}` }
       ])
     }
 
@@ -430,9 +430,10 @@ export class TelegramService {
     }
   }
 
-  private async closeAllPositions(accountId: string): Promise<void> {
+  private async closeAllPositionsAndPause(accountId: string): Promise<void> {
     const data = this.accountSnapshots.get(accountId)
-    if (!data?.snapshot || !this.hyperliquidService) {
+    const state = this.accountStates.get(accountId)
+    if (!data?.snapshot || !this.hyperliquidService || !state) {
       await this.sendMessage('⚠️ No data or service available')
       return
     }
@@ -471,7 +472,18 @@ export class TelegramService {
       }
     }
 
-    await this.sendMessage(`✅ [${data.config.name}] Closed ${closed}/${positions.length} positions${failed > 0 ? ` (${failed} failed)` : ''}`)
+    state.tradingPaused = true
+    const resumeTime = new Date(Date.now() + 4 * 60 * 60 * 1000)
+    const timeStr = resumeTime.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+
+    await this.sendMessage(`✅ [${data.config.name}] Closed ${closed}/${positions.length} positions${failed > 0 ? ` (${failed} failed)` : ''}\n⏸️ Trading paused until ${timeStr}`)
+
+    setTimeout(() => {
+      if (state.tradingPaused) {
+        state.tradingPaused = false
+        this.sendMessage(`▶️ [${data.config.name}] Trading auto-resumed after 4 hours`)
+      }
+    }, 4 * 60 * 60 * 1000)
   }
 
   private async pauseTradingFor4Hours(accountId: string): Promise<void> {
