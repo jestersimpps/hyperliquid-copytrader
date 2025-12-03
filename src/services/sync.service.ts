@@ -1,4 +1,4 @@
-import { DriftReport, PositionDrift, SubAccountConfig } from '@/models'
+import { DriftReport, PositionDrift, SubAccountConfig, SubAccountState } from '@/models'
 import { HyperliquidService } from './hyperliquid.service'
 import { TelegramService } from './telegram.service'
 import { LoggerService } from './logger.service'
@@ -7,6 +7,7 @@ export class SyncService {
   constructor(
     private accountId: string,
     private accountConfig: SubAccountConfig,
+    private accountState: SubAccountState,
     private hyperliquidService: HyperliquidService,
     private telegramService: TelegramService,
     private loggerService: LoggerService,
@@ -14,7 +15,17 @@ export class SyncService {
   ) {}
 
   async syncFavorable(driftReport: DriftReport): Promise<void> {
-    const favorableDrifts = driftReport.drifts.filter(d => d.isFavorable)
+    const now = Date.now()
+    const favorableDrifts = driftReport.drifts.filter(d => {
+      if (!d.isFavorable) return false
+      const pausedUntil = this.accountState.pausedSymbols.get(d.coin)
+      if (pausedUntil && now < pausedUntil) {
+        console.log(`   [${this.accountId}] ⏸️ ${d.coin} paused, skipping sync`)
+        return false
+      }
+      if (pausedUntil) this.accountState.pausedSymbols.delete(d.coin)
+      return true
+    })
 
     if (favorableDrifts.length === 0) {
       console.log(`   [${this.accountId}] No favorable sync opportunities`)

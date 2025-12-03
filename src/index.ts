@@ -81,6 +81,7 @@ async function main(): Promise<void> {
     const syncService = new SyncService(
       accountId,
       accountConfig,
+      state,
       hyperliquidService,
       telegramService,
       loggerService,
