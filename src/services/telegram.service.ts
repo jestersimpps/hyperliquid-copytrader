@@ -159,6 +159,13 @@ export class TelegramService {
           await this.closeAllPositionsAndPause(accountId)
           break
 
+        case 'closepause':
+          if (parts.length >= 3) {
+            const coin = parts[2]
+            await this.closePositionAndPause(accountId, coin)
+          }
+          break
+
         case 'pause4h':
           await this.pauseTradingFor4Hours(accountId)
           break
@@ -225,6 +232,7 @@ export class TelegramService {
           { text: 'Close 50%', callback_data: `close:${accountId}:${pos.coin}:50` },
           { text: 'Close 25%', callback_data: `close:${accountId}:${pos.coin}:25` }
         ])
+        keyboard.push([{ text: `⏸️ Close ${pos.coin} & Pause 4h`, callback_data: `closepause:${accountId}:${pos.coin}` }])
       }
       keyboard.push([
         { text: '🔴 Close All & Pause 4h', callback_data: `closeall4h:${accountId}` },
@@ -427,6 +435,59 @@ export class TelegramService {
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error)
       await this.sendMessage(`❌ [${data.config.name}] Failed to close: ${msg}`)
+    }
+  }
+
+  private async closePositionAndPause(accountId: string, coin: string): Promise<void> {
+    const data = this.accountSnapshots.get(accountId)
+    const state = this.accountStates.get(accountId)
+    if (!data?.snapshot || !this.hyperliquidService || !state) {
+      await this.sendMessage('⚠️ No data or service available')
+      return
+    }
+
+    const position = data.snapshot.userPositions.find(p => p.coin === coin)
+    if (!position) {
+      await this.sendMessage(`⚠️ No ${coin} position found in ${data.config.name}`)
+      return
+    }
+
+    try {
+      await this.sendMessage(`🔄 [${data.config.name}] Closing ${coin} and pausing...`)
+
+      const { userWallet } = data.config
+      const vaultAddress = data.config.vaultAddress || undefined
+
+      await this.hyperliquidService.closePosition(coin, position.markPrice, userWallet, undefined, vaultAddress)
+
+      data.loggerService.logTrade({
+        coin,
+        action: 'close',
+        side: position.side,
+        size: Math.abs(position.size),
+        price: position.markPrice,
+        timestamp: Date.now(),
+        executionMs: 0,
+        connectionId: -1,
+        realizedPnl: position.unrealizedPnl,
+        source: 'telegram'
+      })
+
+      state.tradingPaused = true
+      const resumeTime = new Date(Date.now() + 4 * 60 * 60 * 1000)
+      const timeStr = resumeTime.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+
+      await this.sendMessage(`✅ [${data.config.name}] Closed ${coin}\n⏸️ Trading paused until ${timeStr}`)
+
+      setTimeout(() => {
+        if (state.tradingPaused) {
+          state.tradingPaused = false
+          this.sendMessage(`▶️ [${data.config.name}] Trading auto-resumed after 4 hours`)
+        }
+      }, 4 * 60 * 60 * 1000)
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error)
+      await this.sendMessage(`❌ [${data.config.name}] Failed to close ${coin}: ${msg}`)
     }
   }
 
