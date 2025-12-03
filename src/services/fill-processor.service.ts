@@ -179,7 +179,8 @@ export class FillProcessorService {
     fill: UserFillData
   ): Promise<void> {
     const price = parseFloat(fill.px)
-    const { vaultAddress, userWallet } = this.accountConfig
+    const { userWallet } = this.accountConfig
+    const vaultAddress = this.accountConfig.vaultAddress || undefined
 
     switch (action.action) {
       case 'open':

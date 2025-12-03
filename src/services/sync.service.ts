@@ -34,7 +34,8 @@ export class SyncService {
 
   private async executeSyncTrade(drift: PositionDrift): Promise<void> {
     const startTime = Date.now()
-    const { vaultAddress, userWallet } = this.accountConfig
+    const { userWallet } = this.accountConfig
+    const vaultAddress = this.accountConfig.vaultAddress || undefined
 
     if (drift.driftType === 'missing' && drift.trackedPosition) {
       const { coin, side, markPrice } = drift.trackedPosition
