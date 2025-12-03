@@ -155,6 +155,14 @@ export class TelegramService {
           }
           break
 
+        case 'closeall':
+          await this.closeAllPositions(accountId)
+          break
+
+        case 'pause4h':
+          await this.pauseTradingFor4Hours(accountId)
+          break
+
         case 'back':
           this.selectedAccountId = null
           await this.sendAccountSelector()
@@ -206,6 +214,24 @@ export class TelegramService {
     const state = this.accountStates.get(accountId)
     if (!state) return
 
+    const keyboard: TelegramBot.InlineKeyboardButton[][] = []
+
+    if (data.snapshot && data.snapshot.userPositions.length > 0) {
+      for (const pos of data.snapshot.userPositions) {
+        const pnlSign = pos.unrealizedPnl >= 0 ? '+' : ''
+        const label = `❌ ${pos.coin} ${pnlSign}$${pos.unrealizedPnl.toFixed(0)}`
+        keyboard.push([{ text: label, callback_data: `close:${accountId}:${pos.coin}:100` }])
+        keyboard.push([
+          { text: '50%', callback_data: `close:${accountId}:${pos.coin}:50` },
+          { text: '25%', callback_data: `close:${accountId}:${pos.coin}:25` }
+        ])
+      }
+      keyboard.push([
+        { text: '🔴 Close All', callback_data: `closeall:${accountId}` },
+        { text: '⏸️ Stop 4h', callback_data: `pause4h:${accountId}` }
+      ])
+    }
+
     const tradingButton = state.tradingPaused
       ? { text: '▶️ Resume Trading', callback_data: `resume:${accountId}` }
       : { text: '⏸️ Pause Trading', callback_data: `pause:${accountId}` }
@@ -214,24 +240,8 @@ export class TelegramService {
       ? { text: '⚡ Disable HREF', callback_data: `href_off:${accountId}` }
       : { text: '🔗 Enable HREF', callback_data: `href_on:${accountId}` }
 
-    const keyboard: TelegramBot.InlineKeyboardButton[][] = [
-      [tradingButton],
-      [hrefButton],
-      [{ text: '📊 Status', callback_data: `status:${accountId}` }]
-    ]
-
-    if (data.snapshot && data.snapshot.userPositions.length > 0) {
-      for (const pos of data.snapshot.userPositions) {
-        const pnlSign = pos.unrealizedPnl >= 0 ? '+' : ''
-        const label = `${pos.coin} ${pnlSign}$${pos.unrealizedPnl.toFixed(0)}`
-        keyboard.push([
-          { text: label, callback_data: `close:${accountId}:${pos.coin}:100` },
-          { text: '50%', callback_data: `close:${accountId}:${pos.coin}:50` },
-          { text: '25%', callback_data: `close:${accountId}:${pos.coin}:25` }
-        ])
-      }
-    }
-
+    keyboard.push([tradingButton, hrefButton])
+    keyboard.push([{ text: '📊 Status', callback_data: `status:${accountId}` }])
     keyboard.push([{ text: '⬅️ Back', callback_data: 'back' }])
 
     const statusStr = state.tradingPaused ? '⏸️ PAUSED' : (state.hrefModeEnabled ? '🔗 HREF' : '✅ ACTIVE')
@@ -389,7 +399,8 @@ export class TelegramService {
       const startTime = Date.now()
       await this.sendMessage(`🔄 [${data.config.name}] Closing ${percent}% of ${coin}...`)
 
-      const { userWallet, vaultAddress } = data.config
+      const { userWallet } = data.config
+      const vaultAddress = data.config.vaultAddress || undefined
 
       if (percent === 100) {
         await this.hyperliquidService.closePosition(coin, position.markPrice, userWallet, undefined, vaultAddress)
@@ -417,6 +428,72 @@ export class TelegramService {
       const msg = error instanceof Error ? error.message : String(error)
       await this.sendMessage(`❌ [${data.config.name}] Failed to close: ${msg}`)
     }
+  }
+
+  private async closeAllPositions(accountId: string): Promise<void> {
+    const data = this.accountSnapshots.get(accountId)
+    if (!data?.snapshot || !this.hyperliquidService) {
+      await this.sendMessage('⚠️ No data or service available')
+      return
+    }
+
+    const positions = data.snapshot.userPositions
+    if (positions.length === 0) {
+      await this.sendMessage(`⚠️ [${data.config.name}] No positions to close`)
+      return
+    }
+
+    await this.sendMessage(`🔄 [${data.config.name}] Closing all ${positions.length} position(s)...`)
+
+    const { userWallet } = data.config
+    const vaultAddress = data.config.vaultAddress || undefined
+    let closed = 0
+    let failed = 0
+
+    for (const position of positions) {
+      try {
+        await this.hyperliquidService.closePosition(position.coin, position.markPrice, userWallet, undefined, vaultAddress)
+        data.loggerService.logTrade({
+          coin: position.coin,
+          action: 'close',
+          side: position.side,
+          size: Math.abs(position.size),
+          price: position.markPrice,
+          timestamp: Date.now(),
+          executionMs: 0,
+          connectionId: -1,
+          realizedPnl: position.unrealizedPnl,
+          source: 'telegram'
+        })
+        closed++
+      } catch {
+        failed++
+      }
+    }
+
+    await this.sendMessage(`✅ [${data.config.name}] Closed ${closed}/${positions.length} positions${failed > 0 ? ` (${failed} failed)` : ''}`)
+  }
+
+  private async pauseTradingFor4Hours(accountId: string): Promise<void> {
+    const state = this.accountStates.get(accountId)
+    const data = this.accountSnapshots.get(accountId)
+    if (!state || !data) {
+      await this.sendMessage('⚠️ Account not found')
+      return
+    }
+
+    state.tradingPaused = true
+    const resumeTime = new Date(Date.now() + 4 * 60 * 60 * 1000)
+    const timeStr = resumeTime.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+
+    await this.sendMessage(`⏸️ [${data.config.name}] Trading paused for 4 hours\nWill auto-resume at ${timeStr}`)
+
+    setTimeout(() => {
+      if (state.tradingPaused) {
+        state.tradingPaused = false
+        this.sendMessage(`▶️ [${data.config.name}] Trading auto-resumed after 4 hours`)
+      }
+    }, 4 * 60 * 60 * 1000)
   }
 
   updateSnapshot(accountId: string, snapshot: MonitorSnapshot): void {
