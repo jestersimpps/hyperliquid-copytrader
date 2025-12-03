@@ -28,9 +28,6 @@ export function loadMultiAccountConfig(): MultiAccountConfig {
       console.error(`Account ${account.id || 'unknown'} is missing required fields (id, trackedWallet, userWallet)`)
       process.exit(1)
     }
-    if (!account.vaultAddress) {
-      account.vaultAddress = account.userWallet
-    }
   }
 
   return {
