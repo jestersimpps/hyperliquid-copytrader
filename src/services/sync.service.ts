@@ -15,6 +15,11 @@ export class SyncService {
   ) {}
 
   async syncFavorable(driftReport: DriftReport): Promise<void> {
+    if (this.accountState.tradingPaused) {
+      console.log(`   [${this.accountId}] ⏸️ Trading paused, skipping sync`)
+      return
+    }
+
     const now = Date.now()
     const favorableDrifts = driftReport.drifts.filter(d => {
       if (!d.isFavorable) return false

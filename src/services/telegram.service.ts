@@ -202,9 +202,10 @@ export class TelegramService {
           break
 
         case 'pausedrawdown':
-          if (parts.length >= 3) {
+          if (parts.length >= 4) {
             const coin = parts[2]
-            await this.pauseUntilDrawdown(accountId, coin)
+            const threshold = parseInt(parts[3])
+            await this.pauseUntilDrawdown(accountId, coin, threshold)
           }
           break
 
@@ -299,10 +300,10 @@ export class TelegramService {
         ])
 
         const pausedUntil = state.pausedSymbols.get(pos.coin)
-        const isDrawdownPaused = state.drawdownPausedSymbols.has(pos.coin)
+        const drawdownThreshold = state.drawdownPausedSymbols.get(pos.coin)
 
-        if (isDrawdownPaused) {
-          keyboard.push([{ text: `▶️ Resume ${pos.coin} (waiting for drawdown)`, callback_data: `resumesym:${accountId}:${pos.coin}` }])
+        if (drawdownThreshold) {
+          keyboard.push([{ text: `▶️ Resume ${pos.coin} (waiting for ${drawdownThreshold}% DD)`, callback_data: `resumesym:${accountId}:${pos.coin}` }])
         } else if (pausedUntil && Date.now() < pausedUntil) {
           const remaining = Math.ceil((pausedUntil - Date.now()) / 60000)
           const hours = Math.floor(remaining / 60)
@@ -315,7 +316,12 @@ export class TelegramService {
             { text: '⏸️ 8h', callback_data: `pause8hsym:${accountId}:${pos.coin}` },
             { text: '⏸️ 16h', callback_data: `pause16hsym:${accountId}:${pos.coin}` }
           ])
-          keyboard.push([{ text: '⏸️ Pause until large drawdown', callback_data: `pausedrawdown:${accountId}:${pos.coin}` }])
+          keyboard.push([
+            { text: '❌⏸️ 1%', callback_data: `pausedrawdown:${accountId}:${pos.coin}:1` },
+            { text: '❌⏸️ 2%', callback_data: `pausedrawdown:${accountId}:${pos.coin}:2` },
+            { text: '❌⏸️ 5%', callback_data: `pausedrawdown:${accountId}:${pos.coin}:5` },
+            { text: '❌⏸️ 10%', callback_data: `pausedrawdown:${accountId}:${pos.coin}:10` }
+          ])
         }
       }
     } else {
@@ -702,17 +708,48 @@ export class TelegramService {
     await this.sendAccountMenu(accountId)
   }
 
-  private async pauseUntilDrawdown(accountId: string, coin: string): Promise<void> {
+  private async pauseUntilDrawdown(accountId: string, coin: string, threshold: number): Promise<void> {
     const state = this.accountStates.get(accountId)
     const data = this.accountSnapshots.get(accountId)
-    if (!state || !data) {
+    if (!state || !data?.snapshot || !this.hyperliquidService) {
       await this.sendMessage('⚠️ Account not found')
       return
     }
 
-    state.drawdownPausedSymbols.add(coin)
-    await this.sendMessage(`⏸️ [${data.config.name}] ${coin} paused until tracked account shows >2% loss`)
-    await this.sendAccountMenu(accountId)
+    const position = data.snapshot.userPositions.find(p => p.coin === coin)
+    if (!position) {
+      await this.sendMessage(`⚠️ No ${coin} position found in ${data.config.name}`)
+      return
+    }
+
+    try {
+      await this.sendMessage(`🔄 [${data.config.name}] Closing ${coin} and waiting for ${threshold}% drawdown...`)
+
+      const { userWallet } = data.config
+      const vaultAddress = data.config.vaultAddress || undefined
+
+      await this.hyperliquidService.closePosition(coin, position.markPrice, userWallet, undefined, vaultAddress)
+
+      data.loggerService.logTrade({
+        coin,
+        action: 'close',
+        side: position.side,
+        size: Math.abs(position.size),
+        price: position.markPrice,
+        timestamp: Date.now(),
+        executionMs: 0,
+        connectionId: -1,
+        realizedPnl: position.unrealizedPnl,
+        source: 'telegram'
+      })
+
+      state.drawdownPausedSymbols.set(coin, threshold)
+      await this.sendMessage(`✅ [${data.config.name}] Closed ${coin}\n⏸️ ${coin} waiting for tracked >${threshold}% loss before copying`)
+      await this.sendAccountMenu(accountId)
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error)
+      await this.sendMessage(`❌ [${data.config.name}] Failed to close ${coin}: ${msg}`)
+    }
   }
 
   private async closeAllPositions(accountId: string): Promise<void> {

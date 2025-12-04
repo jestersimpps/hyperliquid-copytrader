@@ -62,7 +62,7 @@ async function main(): Promise<void> {
       tradingPaused: false,
       hrefModeEnabled: false,
       pausedSymbols: new Map(),
-      drawdownPausedSymbols: new Set(),
+      drawdownPausedSymbols: new Map(),
       takeProfitMode: false
     }
 

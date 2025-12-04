@@ -30,11 +30,14 @@ export class FillProcessorService {
   private checkDrawdownResume(coin: string): boolean {
     if (!this.latestSnapshot) return false
 
+    const threshold = this.accountState.drawdownPausedSymbols.get(coin)
+    if (!threshold) return false
+
     const trackedPos = this.latestSnapshot.trackedPositions.find(p => p.coin === coin)
     if (!trackedPos) return false
 
     const pnlPercent = (trackedPos.unrealizedPnl / this.latestSnapshot.trackedBalance) * 100
-    return pnlPercent < -2
+    return pnlPercent < -threshold
   }
 
   getAccountId(): string {
@@ -86,15 +89,16 @@ export class FillProcessorService {
       this.accountState.pausedSymbols.delete(fill.coin)
     }
 
-    if (this.accountState.drawdownPausedSymbols.has(fill.coin)) {
+    const drawdownThreshold = this.accountState.drawdownPausedSymbols.get(fill.coin)
+    if (drawdownThreshold) {
       const shouldResume = this.checkDrawdownResume(fill.coin)
       if (!shouldResume) {
-        console.log(`   [${this.accountId}] ⏸️ ${fill.coin} waiting for >2% drawdown, skipping`)
+        console.log(`   [${this.accountId}] ⏸️ ${fill.coin} waiting for >${drawdownThreshold}% drawdown, skipping`)
         return
       }
       this.accountState.drawdownPausedSymbols.delete(fill.coin)
       console.log(`   [${this.accountId}] ▶️ ${fill.coin} drawdown threshold reached, resuming`)
-      this.telegramService.sendMessage(`▶️ [${this.accountState.name}] ${fill.coin} resumed - tracked position at >2% loss`)
+      this.telegramService.sendMessage(`▶️ [${this.accountState.name}] ${fill.coin} resumed - tracked position at >${drawdownThreshold}% loss`)
     }
 
     if (this.accountState.hrefModeEnabled) {
