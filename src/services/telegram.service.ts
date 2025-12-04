@@ -294,8 +294,8 @@ export class TelegramService {
         keyboard.push([{ text: titleLabel, callback_data: `symbol:${accountId}:${pos.coin}` }])
         keyboard.push([
           { text: '❌ 100%', callback_data: `close:${accountId}:${pos.coin}:100` },
-          { text: '50%', callback_data: `close:${accountId}:${pos.coin}:50` },
-          { text: '25%', callback_data: `close:${accountId}:${pos.coin}:25` }
+          { text: '❌ 50%', callback_data: `close:${accountId}:${pos.coin}:50` },
+          { text: '❌ 25%', callback_data: `close:${accountId}:${pos.coin}:25` }
         ])
 
         const pausedUntil = state.pausedSymbols.get(pos.coin)
