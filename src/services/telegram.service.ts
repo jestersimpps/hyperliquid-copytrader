@@ -127,6 +127,9 @@ export class TelegramService {
           await this.sendAccountMenu(accountId)
           break
 
+        case 'symbol':
+          break
+
         case 'pause':
           await this.setAccountTradingPaused(accountId, true)
           break
@@ -286,8 +289,9 @@ export class TelegramService {
       for (const pos of data.snapshot.userPositions) {
         const pnlSign = pos.unrealizedPnl >= 0 ? '+' : ''
         const positionUsd = pos.notionalValue.toFixed(0)
-        messageText += `\n📊 *${pos.coin}* - $${positionUsd} - ${pnlSign}$${pos.unrealizedPnl.toFixed(0)}\n`
+        const titleLabel = `📊 ${pos.coin} - $${positionUsd} - ${pnlSign}$${pos.unrealizedPnl.toFixed(0)}`
 
+        keyboard.push([{ text: titleLabel, callback_data: `symbol:${accountId}:${pos.coin}` }])
         keyboard.push([
           { text: '❌ 100%', callback_data: `close:${accountId}:${pos.coin}:100` },
           { text: '50%', callback_data: `close:${accountId}:${pos.coin}:50` },
