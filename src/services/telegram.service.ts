@@ -914,8 +914,12 @@ export class TelegramService {
       message += `└ Action: ${favorableStr}\n\n`
     }
 
+    const state = this.accountStates.get(accountId)
     const favorableCount = driftReport.drifts.filter(d => d.isFavorable).length
-    if (favorableCount > 0) {
+
+    if (state?.tradingPaused) {
+      message += `_⏸️ Trading paused, sync skipped_`
+    } else if (favorableCount > 0) {
       message += `_Syncing ${favorableCount} favorable position(s)..._`
     } else {
       message += `_No favorable sync opportunities_`
