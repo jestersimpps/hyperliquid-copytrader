@@ -18,6 +18,12 @@ export class SyncService {
     const now = Date.now()
     const favorableDrifts = driftReport.drifts.filter(d => {
       if (!d.isFavorable) return false
+
+      if (this.accountState.drawdownPausedSymbols.has(d.coin)) {
+        console.log(`   [${this.accountId}] ⏸️ ${d.coin} waiting for drawdown, skipping sync`)
+        return false
+      }
+
       const pausedUntil = this.accountState.pausedSymbols.get(d.coin)
       if (pausedUntil && now < pausedUntil) {
         console.log(`   [${this.accountId}] ⏸️ ${d.coin} paused, skipping sync`)
