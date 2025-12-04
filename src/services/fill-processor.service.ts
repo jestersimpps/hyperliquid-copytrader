@@ -4,8 +4,14 @@ import { LoggerService } from './logger.service'
 import { TelegramService } from './telegram.service'
 import { scaleSize, formatScaledSize } from '@/utils/scaling.utils'
 
+interface TrackedSnapshot {
+  trackedPositions: Array<{ coin: string; unrealizedPnl: number }>
+  trackedBalance: number
+}
+
 export class FillProcessorService {
   private balanceRatio: number = 1
+  private latestSnapshot: TrackedSnapshot | null = null
 
   constructor(
     private accountId: string,
@@ -16,6 +22,20 @@ export class FillProcessorService {
     private telegramService: TelegramService,
     private minOrderValue: number
   ) {}
+
+  setLatestSnapshot(trackedPositions: Array<{ coin: string; unrealizedPnl: number }>, trackedBalance: number): void {
+    this.latestSnapshot = { trackedPositions, trackedBalance }
+  }
+
+  private checkDrawdownResume(coin: string): boolean {
+    if (!this.latestSnapshot) return false
+
+    const trackedPos = this.latestSnapshot.trackedPositions.find(p => p.coin === coin)
+    if (!trackedPos) return false
+
+    const pnlPercent = (trackedPos.unrealizedPnl / this.latestSnapshot.trackedBalance) * 100
+    return pnlPercent < -2
+  }
 
   getAccountId(): string {
     return this.accountId
@@ -64,6 +84,17 @@ export class FillProcessorService {
       return
     } else if (pausedUntil) {
       this.accountState.pausedSymbols.delete(fill.coin)
+    }
+
+    if (this.accountState.drawdownPausedSymbols.has(fill.coin)) {
+      const shouldResume = this.checkDrawdownResume(fill.coin)
+      if (!shouldResume) {
+        console.log(`   [${this.accountId}] ⏸️ ${fill.coin} waiting for >2% drawdown, skipping`)
+        return
+      }
+      this.accountState.drawdownPausedSymbols.delete(fill.coin)
+      console.log(`   [${this.accountId}] ▶️ ${fill.coin} drawdown threshold reached, resuming`)
+      this.telegramService.sendMessage(`▶️ [${this.accountState.name}] ${fill.coin} resumed - tracked position at >2% loss`)
     }
 
     if (this.accountState.hrefModeEnabled) {

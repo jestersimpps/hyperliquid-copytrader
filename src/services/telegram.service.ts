@@ -191,6 +191,39 @@ export class TelegramService {
           }
           break
 
+        case 'pause16hsym':
+          if (parts.length >= 3) {
+            const coin = parts[2]
+            await this.pauseSymbol(accountId, coin, 16)
+          }
+          break
+
+        case 'pausedrawdown':
+          if (parts.length >= 3) {
+            const coin = parts[2]
+            await this.pauseUntilDrawdown(accountId, coin)
+          }
+          break
+
+        case 'closeall':
+          await this.closeAllPositions(accountId)
+          break
+
+        case 'pauseall':
+          if (parts.length >= 3) {
+            const hours = parseInt(parts[2])
+            await this.pauseAllSymbols(accountId, hours)
+          }
+          break
+
+        case 'takeprofit_on':
+          await this.setTakeProfitMode(accountId, true)
+          break
+
+        case 'takeprofit_off':
+          await this.setTakeProfitMode(accountId, false)
+          break
+
         case 'back':
           this.selectedAccountId = null
           await this.sendAccountSelector()
@@ -243,18 +276,30 @@ export class TelegramService {
     if (!state) return
 
     const keyboard: TelegramBot.InlineKeyboardButton[][] = []
+    let messageText = ''
+
+    const statusStr = state.tradingPaused ? '⏸️ PAUSED' : (state.hrefModeEnabled ? '🔗 HREF' : (state.takeProfitMode ? '💰 TP' : '✅ ACTIVE'))
+    messageText = `🎛️ *${data.config.name}* (${statusStr})\n`
+    messageText += `Tracking: \`${this.formatAddress(data.config.trackedWallet)}\`\n`
 
     if (data.snapshot && data.snapshot.userPositions.length > 0) {
       for (const pos of data.snapshot.userPositions) {
         const pnlSign = pos.unrealizedPnl >= 0 ? '+' : ''
-        const label = `❌ Close 100% ${pos.coin} (${pnlSign}$${pos.unrealizedPnl.toFixed(0)})`
-        keyboard.push([{ text: label, callback_data: `close:${accountId}:${pos.coin}:100` }])
+        const positionUsd = pos.notionalValue.toFixed(0)
+        messageText += `\n📊 *${pos.coin}* - $${positionUsd} - ${pnlSign}$${pos.unrealizedPnl.toFixed(0)}\n`
+
         keyboard.push([
-          { text: 'Close 50%', callback_data: `close:${accountId}:${pos.coin}:50` },
-          { text: 'Close 25%', callback_data: `close:${accountId}:${pos.coin}:25` }
+          { text: '❌ 100%', callback_data: `close:${accountId}:${pos.coin}:100` },
+          { text: '50%', callback_data: `close:${accountId}:${pos.coin}:50` },
+          { text: '25%', callback_data: `close:${accountId}:${pos.coin}:25` }
         ])
+
         const pausedUntil = state.pausedSymbols.get(pos.coin)
-        if (pausedUntil && Date.now() < pausedUntil) {
+        const isDrawdownPaused = state.drawdownPausedSymbols.has(pos.coin)
+
+        if (isDrawdownPaused) {
+          keyboard.push([{ text: `▶️ Resume ${pos.coin} (waiting for drawdown)`, callback_data: `resumesym:${accountId}:${pos.coin}` }])
+        } else if (pausedUntil && Date.now() < pausedUntil) {
           const remaining = Math.ceil((pausedUntil - Date.now()) / 60000)
           const hours = Math.floor(remaining / 60)
           const mins = remaining % 60
@@ -262,16 +307,23 @@ export class TelegramService {
           keyboard.push([{ text: `▶️ Resume ${pos.coin} (${timeStr} left)`, callback_data: `resumesym:${accountId}:${pos.coin}` }])
         } else {
           keyboard.push([
-            { text: `⏸️ Pause 4h`, callback_data: `pause4hsym:${accountId}:${pos.coin}` },
-            { text: `⏸️ Pause 8h`, callback_data: `pause8hsym:${accountId}:${pos.coin}` }
+            { text: '⏸️ 4h', callback_data: `pause4hsym:${accountId}:${pos.coin}` },
+            { text: '⏸️ 8h', callback_data: `pause8hsym:${accountId}:${pos.coin}` },
+            { text: '⏸️ 16h', callback_data: `pause16hsym:${accountId}:${pos.coin}` }
           ])
+          keyboard.push([{ text: '⏸️ Pause until large drawdown', callback_data: `pausedrawdown:${accountId}:${pos.coin}` }])
         }
       }
-      keyboard.push([
-        { text: '🔴 Close All & Pause 4h', callback_data: `closeall4h:${accountId}` },
-        { text: '⏸️ Pause 4h', callback_data: `pause4h:${accountId}` }
-      ])
+    } else {
+      messageText += '\n_No open positions_\n'
     }
+
+    keyboard.push([{ text: '🔴 Close All', callback_data: `closeall:${accountId}` }])
+    keyboard.push([
+      { text: '⏸️ 4h', callback_data: `pauseall:${accountId}:4` },
+      { text: '⏸️ 8h', callback_data: `pauseall:${accountId}:8` },
+      { text: '⏸️ 16h', callback_data: `pauseall:${accountId}:16` }
+    ])
 
     const tradingButton = state.tradingPaused
       ? { text: '▶️ Resume Trading', callback_data: `resume:${accountId}` }
@@ -282,15 +334,18 @@ export class TelegramService {
       : { text: '🔗 Enable HREF', callback_data: `href_on:${accountId}` }
 
     keyboard.push([tradingButton, hrefButton])
+
+    const takeProfitButton = state.takeProfitMode
+      ? { text: '💰 Disable Take Profit Mode', callback_data: `takeprofit_off:${accountId}` }
+      : { text: '💰 Enable Take Profit Mode', callback_data: `takeprofit_on:${accountId}` }
+
+    keyboard.push([takeProfitButton])
     keyboard.push([{ text: '📊 Status', callback_data: `status:${accountId}` }])
     keyboard.push([{ text: '⬅️ Back', callback_data: 'back' }])
 
-    const statusStr = state.tradingPaused ? '⏸️ PAUSED' : (state.hrefModeEnabled ? '🔗 HREF' : '✅ ACTIVE')
-
     await this.bot.sendMessage(
       this.chatId,
-      `🎛️ *${data.config.name}* (${statusStr})\n` +
-      `Tracking: \`${this.formatAddress(data.config.trackedWallet)}\``,
+      messageText,
       {
         parse_mode: 'Markdown',
         reply_markup: { inline_keyboard: keyboard }
@@ -638,7 +693,118 @@ export class TelegramService {
     }
 
     state.pausedSymbols.delete(coin)
+    state.drawdownPausedSymbols.delete(coin)
     await this.sendMessage(`▶️ [${data.config.name}] ${coin} trading resumed`)
+    await this.sendAccountMenu(accountId)
+  }
+
+  private async pauseUntilDrawdown(accountId: string, coin: string): Promise<void> {
+    const state = this.accountStates.get(accountId)
+    const data = this.accountSnapshots.get(accountId)
+    if (!state || !data) {
+      await this.sendMessage('⚠️ Account not found')
+      return
+    }
+
+    state.drawdownPausedSymbols.add(coin)
+    await this.sendMessage(`⏸️ [${data.config.name}] ${coin} paused until tracked account shows >2% loss`)
+    await this.sendAccountMenu(accountId)
+  }
+
+  private async closeAllPositions(accountId: string): Promise<void> {
+    const data = this.accountSnapshots.get(accountId)
+    if (!data?.snapshot || !this.hyperliquidService) {
+      await this.sendMessage('⚠️ No data or service available')
+      return
+    }
+
+    const positions = data.snapshot.userPositions
+    if (positions.length === 0) {
+      await this.sendMessage(`⚠️ [${data.config.name}] No positions to close`)
+      return
+    }
+
+    await this.sendMessage(`🔄 [${data.config.name}] Closing all ${positions.length} position(s)...`)
+
+    const { userWallet } = data.config
+    const vaultAddress = data.config.vaultAddress || undefined
+    let closed = 0
+    let failed = 0
+
+    for (const position of positions) {
+      try {
+        await this.hyperliquidService.closePosition(position.coin, position.markPrice, userWallet, undefined, vaultAddress)
+        data.loggerService.logTrade({
+          coin: position.coin,
+          action: 'close',
+          side: position.side,
+          size: Math.abs(position.size),
+          price: position.markPrice,
+          timestamp: Date.now(),
+          executionMs: 0,
+          connectionId: -1,
+          realizedPnl: position.unrealizedPnl,
+          source: 'telegram'
+        })
+        closed++
+      } catch {
+        failed++
+      }
+    }
+
+    await this.sendMessage(`✅ [${data.config.name}] Closed ${closed}/${positions.length} positions${failed > 0 ? ` (${failed} failed)` : ''}`)
+  }
+
+  private async pauseAllSymbols(accountId: string, hours: number): Promise<void> {
+    const state = this.accountStates.get(accountId)
+    const data = this.accountSnapshots.get(accountId)
+    if (!state || !data?.snapshot) {
+      await this.sendMessage('⚠️ Account not found')
+      return
+    }
+
+    const pauseUntil = Date.now() + hours * 60 * 60 * 1000
+    const coins: string[] = []
+
+    for (const pos of data.snapshot.userPositions) {
+      state.pausedSymbols.set(pos.coin, pauseUntil)
+      coins.push(pos.coin)
+    }
+
+    if (coins.length === 0) {
+      await this.sendMessage(`⚠️ [${data.config.name}] No positions to pause`)
+      return
+    }
+
+    const resumeTime = new Date(pauseUntil)
+    const timeStr = resumeTime.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+
+    await this.sendMessage(`⏸️ [${data.config.name}] Paused ${coins.length} symbol(s) for ${hours}h\nWill auto-resume at ${timeStr}`)
+
+    setTimeout(() => {
+      for (const coin of coins) {
+        if (state.pausedSymbols.get(coin) === pauseUntil) {
+          state.pausedSymbols.delete(coin)
+        }
+      }
+      this.sendMessage(`▶️ [${data.config.name}] ${coins.length} symbol(s) auto-resumed after ${hours} hours`)
+    }, hours * 60 * 60 * 1000)
+
+    await this.sendAccountMenu(accountId)
+  }
+
+  private async setTakeProfitMode(accountId: string, enabled: boolean): Promise<void> {
+    const state = this.accountStates.get(accountId)
+    const data = this.accountSnapshots.get(accountId)
+    if (!state || !data) {
+      await this.sendMessage('⚠️ Account not found')
+      return
+    }
+
+    state.takeProfitMode = enabled
+    await this.sendMessage(enabled
+      ? `💰 [${data.config.name}] Take profit mode *enabled*\nPositions will auto-close at +1% profit`
+      : `💰 [${data.config.name}] Take profit mode *disabled*`)
     await this.sendAccountMenu(accountId)
   }
 

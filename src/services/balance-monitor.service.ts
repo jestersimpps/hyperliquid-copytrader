@@ -67,6 +67,7 @@ export class BalanceMonitorService {
       const balanceRatio = calculateBalanceRatio(userValue, trackedValue)
 
       this.fillProcessor.setBalanceRatio(balanceRatio)
+      this.fillProcessor.setLatestSnapshot(trackedPositions, trackedValue)
 
       const snapshot: MonitorSnapshot = {
         trackedBalance,
@@ -80,6 +81,8 @@ export class BalanceMonitorService {
       this.loggerService.logSnapshot(snapshot)
       this.telegramService.updateSnapshot(this.accountId, snapshot)
       await this.riskMonitor.checkRisks(snapshot)
+
+      await this.checkTakeProfitMode(userPositions, userValue)
 
       console.log(`\n[${this.accountId}] 📊 Balance | Tracked: $${trackedValue.toFixed(2)} (${trackedPositions.length} pos) | User: $${userValue.toFixed(2)} (${userPositions.length} pos) | Ratio: ${balanceRatio.toFixed(4)}`)
 
@@ -128,6 +131,50 @@ export class BalanceMonitorService {
     } catch (error) {
       console.error(`[${this.accountId}] Failed to get snapshot:`, error instanceof Error ? error.message : error)
       return null
+    }
+  }
+
+  private async checkTakeProfitMode(userPositions: Position[], userBalance: number): Promise<void> {
+    const state = this.telegramService.getAccountState(this.accountId)
+    if (!state?.takeProfitMode) return
+
+    const { userWallet, vaultAddress } = this.accountConfig
+
+    for (const pos of userPositions) {
+      const profitPercent = (pos.unrealizedPnl / userBalance) * 100
+
+      if (profitPercent > 1) {
+        console.log(`[${this.accountId}] 💰 Take profit: ${pos.coin} at +${profitPercent.toFixed(2)}%`)
+
+        try {
+          await this.hyperliquidService.closePosition(
+            pos.coin,
+            pos.markPrice,
+            userWallet,
+            undefined,
+            vaultAddress || undefined
+          )
+
+          this.loggerService.logTrade({
+            coin: pos.coin,
+            action: 'close',
+            side: pos.side,
+            size: Math.abs(pos.size),
+            price: pos.markPrice,
+            timestamp: Date.now(),
+            executionMs: 0,
+            connectionId: -1,
+            realizedPnl: pos.unrealizedPnl,
+            source: 'take-profit'
+          })
+
+          await this.telegramService.sendMessage(
+            `💰 [${state.name}] Take profit: Closed ${pos.coin} at +${profitPercent.toFixed(1)}% (+$${pos.unrealizedPnl.toFixed(2)})`
+          )
+        } catch (error) {
+          console.error(`[${this.accountId}] Take profit failed for ${pos.coin}:`, error instanceof Error ? error.message : error)
+        }
+      }
     }
   }
 }

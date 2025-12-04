@@ -31,6 +31,8 @@ export interface SubAccountState {
   tradingPaused: boolean
   hrefModeEnabled: boolean
   pausedSymbols: Map<string, number>
+  drawdownPausedSymbols: Set<string>
+  takeProfitMode: boolean
 }
 
 export interface AccountContext {
