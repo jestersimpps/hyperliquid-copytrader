@@ -170,6 +170,27 @@ export class TelegramService {
           await this.pauseTradingFor4Hours(accountId)
           break
 
+        case 'pause4hsym':
+          if (parts.length >= 3) {
+            const coin = parts[2]
+            await this.pauseSymbol(accountId, coin, 4)
+          }
+          break
+
+        case 'pause8hsym':
+          if (parts.length >= 3) {
+            const coin = parts[2]
+            await this.pauseSymbol(accountId, coin, 8)
+          }
+          break
+
+        case 'resumesym':
+          if (parts.length >= 3) {
+            const coin = parts[2]
+            await this.resumeSymbol(accountId, coin)
+          }
+          break
+
         case 'back':
           this.selectedAccountId = null
           await this.sendAccountSelector()
@@ -232,7 +253,19 @@ export class TelegramService {
           { text: 'Close 50%', callback_data: `close:${accountId}:${pos.coin}:50` },
           { text: 'Close 25%', callback_data: `close:${accountId}:${pos.coin}:25` }
         ])
-        keyboard.push([{ text: `⏸️ Close ${pos.coin} & Pause 4h`, callback_data: `closepause:${accountId}:${pos.coin}` }])
+        const pausedUntil = state.pausedSymbols.get(pos.coin)
+        if (pausedUntil && Date.now() < pausedUntil) {
+          const remaining = Math.ceil((pausedUntil - Date.now()) / 60000)
+          const hours = Math.floor(remaining / 60)
+          const mins = remaining % 60
+          const timeStr = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`
+          keyboard.push([{ text: `▶️ Resume ${pos.coin} (${timeStr} left)`, callback_data: `resumesym:${accountId}:${pos.coin}` }])
+        } else {
+          keyboard.push([
+            { text: `⏸️ Pause 4h`, callback_data: `pause4hsym:${accountId}:${pos.coin}` },
+            { text: `⏸️ Pause 8h`, callback_data: `pause8hsym:${accountId}:${pos.coin}` }
+          ])
+        }
       }
       keyboard.push([
         { text: '🔴 Close All & Pause 4h', callback_data: `closeall4h:${accountId}` },
@@ -318,6 +351,7 @@ export class TelegramService {
       }
     }
     if (row.length > 0) keyboard.push(row)
+    keyboard.push([{ text: '🔄 Restart Bot', callback_data: 'restart' }])
 
     await this.bot.sendMessage(this.chatId, message, {
       parse_mode: 'Markdown',
@@ -568,6 +602,44 @@ export class TelegramService {
         this.sendMessage(`▶️ [${data.config.name}] Trading auto-resumed after 4 hours`)
       }
     }, 4 * 60 * 60 * 1000)
+  }
+
+  private async pauseSymbol(accountId: string, coin: string, hours: number): Promise<void> {
+    const state = this.accountStates.get(accountId)
+    const data = this.accountSnapshots.get(accountId)
+    if (!state || !data) {
+      await this.sendMessage('⚠️ Account not found')
+      return
+    }
+
+    const pauseUntil = Date.now() + hours * 60 * 60 * 1000
+    state.pausedSymbols.set(coin, pauseUntil)
+    const resumeTime = new Date(pauseUntil)
+    const timeStr = resumeTime.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+
+    await this.sendMessage(`⏸️ [${data.config.name}] ${coin} trading paused for ${hours} hours\nWill auto-resume at ${timeStr}`)
+
+    setTimeout(() => {
+      if (state.pausedSymbols.get(coin) === pauseUntil) {
+        state.pausedSymbols.delete(coin)
+        this.sendMessage(`▶️ [${data.config.name}] ${coin} trading auto-resumed after ${hours} hours`)
+      }
+    }, hours * 60 * 60 * 1000)
+
+    await this.sendAccountMenu(accountId)
+  }
+
+  private async resumeSymbol(accountId: string, coin: string): Promise<void> {
+    const state = this.accountStates.get(accountId)
+    const data = this.accountSnapshots.get(accountId)
+    if (!state || !data) {
+      await this.sendMessage('⚠️ Account not found')
+      return
+    }
+
+    state.pausedSymbols.delete(coin)
+    await this.sendMessage(`▶️ [${data.config.name}] ${coin} trading resumed`)
+    await this.sendAccountMenu(accountId)
   }
 
   updateSnapshot(accountId: string, snapshot: MonitorSnapshot): void {
