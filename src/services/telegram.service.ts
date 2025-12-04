@@ -328,6 +328,45 @@ export class TelegramService {
       messageText += '\n_No open positions_\n'
     }
 
+    if (data.snapshot && data.snapshot.trackedPositions.length > 0) {
+      const userCoins = new Set(data.snapshot.userPositions.map(p => p.coin))
+      const trackedOnlyPositions = data.snapshot.trackedPositions.filter(p => !userCoins.has(p.coin))
+
+      if (trackedOnlyPositions.length > 0) {
+        messageText += '\n_Tracked wallet symbols:_\n'
+
+        for (const pos of trackedOnlyPositions) {
+          const titleLabel = `👁️ ${pos.coin} (tracked only)`
+
+          keyboard.push([{ text: titleLabel, callback_data: `symbol:${accountId}:${pos.coin}` }])
+          keyboard.push([
+            { text: '❌ 100%', callback_data: `close:${accountId}:${pos.coin}:100` },
+            { text: '❌ 50%', callback_data: `close:${accountId}:${pos.coin}:50` },
+            { text: '❌ 25%', callback_data: `close:${accountId}:${pos.coin}:25` }
+          ])
+
+          const pausedUntil = state.pausedSymbols.get(pos.coin)
+          const drawdownThreshold = state.drawdownPausedSymbols.get(pos.coin)
+
+          if (drawdownThreshold) {
+            keyboard.push([{ text: `▶️ Resume ${pos.coin} (waiting for ${drawdownThreshold}% DD)`, callback_data: `resumesym:${accountId}:${pos.coin}` }])
+          } else if (pausedUntil && Date.now() < pausedUntil) {
+            const remaining = Math.ceil((pausedUntil - Date.now()) / 60000)
+            const hours = Math.floor(remaining / 60)
+            const mins = remaining % 60
+            const timeStr = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`
+            keyboard.push([{ text: `▶️ Resume ${pos.coin} (${timeStr} left)`, callback_data: `resumesym:${accountId}:${pos.coin}` }])
+          } else {
+            keyboard.push([
+              { text: '⏸️ 4h', callback_data: `pause4hsym:${accountId}:${pos.coin}` },
+              { text: '⏸️ 8h', callback_data: `pause8hsym:${accountId}:${pos.coin}` },
+              { text: '⏸️ 16h', callback_data: `pause16hsym:${accountId}:${pos.coin}` }
+            ])
+          }
+        }
+      }
+    }
+
     keyboard.push([{ text: '🔴 Close All', callback_data: `closeall:${accountId}` }])
     keyboard.push([
       { text: '⏸️ 4h', callback_data: `pauseall:${accountId}:4` },
