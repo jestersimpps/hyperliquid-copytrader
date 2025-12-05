@@ -247,6 +247,9 @@ export class TelegramService {
           await this.sendMessage('🔄 Restarting bot...')
           setTimeout(() => process.exit(0), 1000)
           break
+
+        case 'noop':
+          break
       }
     })
   }
@@ -296,7 +299,7 @@ export class TelegramService {
       for (const pos of data.snapshot.userPositions) {
         const pnlSign = pos.unrealizedPnl >= 0 ? '+' : ''
         const positionUsd = pos.notionalValue.toFixed(0)
-        const titleLabel = `📊 ${pos.coin} - $${positionUsd} - ${pnlSign}$${pos.unrealizedPnl.toFixed(0)}`
+        const titleLabel = `━━ 📊 ${pos.coin} $${positionUsd} (${pnlSign}$${pos.unrealizedPnl.toFixed(0)}) ━━`
 
         keyboard.push([{ text: titleLabel, callback_data: `symbol:${accountId}:${pos.coin}` }])
         keyboard.push([
@@ -342,7 +345,7 @@ export class TelegramService {
         messageText += '\n_Tracked wallet symbols:_\n'
 
         for (const pos of trackedOnlyPositions) {
-          const titleLabel = `👁️ ${pos.coin} (tracked only)`
+          const titleLabel = `━━ 👁️ ${pos.coin} (tracked) ━━`
 
           keyboard.push([{ text: titleLabel, callback_data: `symbol:${accountId}:${pos.coin}` }])
           keyboard.push([
@@ -373,19 +376,23 @@ export class TelegramService {
       }
     }
 
-    keyboard.push([{ text: '🔴 Close All', callback_data: `closeall:${accountId}` }])
+    keyboard.push([{ text: '━━━━━━━━━━━━━━━━━━━━', callback_data: 'noop' }])
+
+    const tradingButton = state.tradingPaused
+      ? { text: '▶️ Resume', callback_data: `resume:${accountId}` }
+      : { text: '⏸️ Pause', callback_data: `pause:${accountId}` }
+
+    keyboard.push([
+      { text: '🔴 Close All', callback_data: `closeall:${accountId}` },
+      tradingButton
+    ])
     keyboard.push([
       { text: '⏸️ 4h', callback_data: `pauseall:${accountId}:4` },
       { text: '⏸️ 8h', callback_data: `pauseall:${accountId}:8` },
       { text: '⏸️ 16h', callback_data: `pauseall:${accountId}:16` }
     ])
 
-    const tradingButton = state.tradingPaused
-      ? { text: '▶️ Resume Trading', callback_data: `resume:${accountId}` }
-      : { text: '⏸️ Pause Trading', callback_data: `pause:${accountId}` }
-
-    keyboard.push([tradingButton])
-
+    keyboard.push([{ text: '━━━ 🔗 HREF ━━━', callback_data: 'noop' }])
     const hrefThreshold = state.hrefThreshold
     keyboard.push([
       { text: hrefThreshold === 0 ? '✓ Off' : 'Off', callback_data: `href:${accountId}:0` },
@@ -394,12 +401,7 @@ export class TelegramService {
       { text: hrefThreshold === 5 ? '✓ 5%' : '5%', callback_data: `href:${accountId}:5` }
     ])
 
-    const takeProfitButton = state.takeProfitMode
-      ? { text: '💰 Disable Take Profit Mode', callback_data: `takeprofit_off:${accountId}` }
-      : { text: '💰 Enable Take Profit Mode', callback_data: `takeprofit_on:${accountId}` }
-
-    keyboard.push([takeProfitButton])
-
+    keyboard.push([{ text: '━━━ 📐 Size ━━━', callback_data: 'noop' }])
     const sizeMultiplier = state.positionSizeMultiplier
     keyboard.push([
       { text: sizeMultiplier === 0.25 ? '✓ ¼x' : '¼x', callback_data: `size:${accountId}:0.25` },
@@ -407,8 +409,16 @@ export class TelegramService {
       { text: sizeMultiplier === 1 ? '✓ 1x' : '1x', callback_data: `size:${accountId}:1` }
     ])
 
-    keyboard.push([{ text: '📊 Status', callback_data: `status:${accountId}` }])
-    keyboard.push([{ text: '⬅️ Back', callback_data: 'back' }])
+    keyboard.push([{ text: '━━━ 💰 Take Profit ━━━', callback_data: 'noop' }])
+    const takeProfitButton = state.takeProfitMode
+      ? { text: '✓ Enabled', callback_data: `takeprofit_off:${accountId}` }
+      : { text: 'Disabled', callback_data: `takeprofit_on:${accountId}` }
+    keyboard.push([takeProfitButton])
+
+    keyboard.push([
+      { text: '📊 Status', callback_data: `status:${accountId}` },
+      { text: '⬅️ Back', callback_data: 'back' }
+    ])
 
     await this.bot.sendMessage(
       this.chatId,
