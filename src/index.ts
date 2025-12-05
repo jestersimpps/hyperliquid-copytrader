@@ -11,6 +11,7 @@ import { LoggerService } from '@/services/logger.service'
 import { RiskMonitorService } from '@/services/risk-monitor.service'
 import { TrackedWalletManager } from '@/services/tracked-wallet-manager.service'
 import { startServer } from '@/api/server'
+import { loadState } from '@/services/state-persistence.service'
 
 interface AccountContext {
   id: string
@@ -56,15 +57,20 @@ async function main(): Promise<void> {
     const minOrderValue = getAccountMinOrderValue(accountConfig, globalConfig)
     const driftThreshold = getAccountDriftThreshold(accountConfig, globalConfig)
 
+    const savedState = loadState(accountId)
     const state: SubAccountState = {
       id: accountId,
       name: accountConfig.name,
-      tradingPaused: false,
-      hrefThreshold: 0,
-      pausedSymbols: new Map(),
-      drawdownPausedSymbols: new Map(),
-      takeProfitMode: false,
-      positionSizeMultiplier: 1
+      tradingPaused: savedState?.tradingPaused ?? false,
+      hrefThreshold: savedState?.hrefThreshold ?? 0,
+      pausedSymbols: savedState?.pausedSymbols ?? new Map(),
+      drawdownPausedSymbols: savedState?.drawdownPausedSymbols ?? new Map(),
+      takeProfitMode: savedState?.takeProfitMode ?? false,
+      positionSizeMultiplier: savedState?.positionSizeMultiplier ?? 1
+    }
+
+    if (savedState) {
+      console.log(`   [${accountId}] Restored state: HREF=${state.hrefThreshold}%, TP=${state.takeProfitMode}, Size=${state.positionSizeMultiplier}x`)
     }
 
     const loggerService = new LoggerService(accountId)

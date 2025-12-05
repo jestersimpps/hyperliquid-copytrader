@@ -3,6 +3,7 @@ import { DriftReport, Position, TelegramConfig, SubAccountConfig, SubAccountStat
 import { MonitorSnapshot } from './balance-monitor.service'
 import { HyperliquidService } from './hyperliquid.service'
 import { LoggerService } from './logger.service'
+import { saveState } from './state-persistence.service'
 
 interface AccountSnapshotData {
   snapshot: MonitorSnapshot
@@ -535,6 +536,7 @@ export class TelegramService {
     const state = this.accountStates.get(accountId)
     if (state) {
       state.tradingPaused = paused
+      saveState(accountId, state)
       const data = this.accountSnapshots.get(accountId)
       const name = data?.config.name || accountId
       await this.sendMessage(paused
@@ -552,6 +554,7 @@ export class TelegramService {
     }
 
     state.hrefThreshold = threshold
+    saveState(accountId, state)
     const label = threshold === 0 ? 'Off' : `${threshold}%`
     await this.sendMessage(`🔗 [${data.config.name}] HREF mode: *${label}*`)
     await this.sendAccountMenu(accountId)
@@ -773,6 +776,7 @@ export class TelegramService {
 
     state.pausedSymbols.delete(coin)
     state.drawdownPausedSymbols.delete(coin)
+    saveState(accountId, state)
     await this.sendMessage(`▶️ [${data.config.name}] ${coin} trading resumed`)
     await this.sendAccountMenu(accountId)
   }
@@ -813,6 +817,7 @@ export class TelegramService {
       })
 
       state.drawdownPausedSymbols.set(coin, threshold)
+      saveState(accountId, state)
       await this.sendMessage(`✅ [${data.config.name}] Closed ${coin}\n⏸️ ${coin} waiting for tracked >${threshold}% loss before copying`)
       await this.sendAccountMenu(accountId)
     } catch (error) {
@@ -912,6 +917,7 @@ export class TelegramService {
     }
 
     state.takeProfitMode = enabled
+    saveState(accountId, state)
     await this.sendMessage(enabled
       ? `💰 [${data.config.name}] Take profit mode *enabled*\nPositions will auto-close at +1% profit`
       : `💰 [${data.config.name}] Take profit mode *disabled*`)
@@ -927,6 +933,7 @@ export class TelegramService {
     }
 
     state.positionSizeMultiplier = multiplier
+    saveState(accountId, state)
     const label = multiplier === 0.25 ? '¼x (Safe)' : multiplier === 0.5 ? '½x (Conservative)' : '1x (Aggressive)'
     await this.sendMessage(`📊 [${data.config.name}] Position size mode: *${label}*`)
     await this.sendAccountMenu(accountId)
