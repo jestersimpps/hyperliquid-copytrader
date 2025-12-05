@@ -14,7 +14,7 @@ export class SyncService {
     private minOrderValue: number
   ) {}
 
-  async syncFavorable(driftReport: DriftReport): Promise<void> {
+  async syncFavorable(driftReport: DriftReport, trackedBalance: number): Promise<void> {
     if (this.accountState.tradingPaused) {
       console.log(`   [${this.accountId}] ⏸️ Trading paused, skipping sync`)
       return
@@ -35,6 +35,21 @@ export class SyncService {
         return false
       }
       if (pausedUntil) this.accountState.pausedSymbols.delete(d.coin)
+
+      const entryDriftTypes = ['missing', 'side_mismatch']
+      const isEntryDrift = entryDriftTypes.includes(d.driftType) ||
+        (d.driftType === 'size_mismatch' && d.userPosition && d.trackedPosition &&
+         d.userPosition.size < d.scaledTargetSize)
+
+      if (this.accountState.hrefThreshold > 0 && isEntryDrift && d.trackedPosition) {
+        const pnlPercent = (d.trackedPosition.unrealizedPnl / trackedBalance) * 100
+        if (pnlPercent >= -this.accountState.hrefThreshold) {
+          console.log(`   [${this.accountId}] ⏸️ ${d.coin} waiting for drawdown, skipping sync`)
+          return false
+        }
+        console.log(`   [${this.accountId}] 🔗 HREF ${this.accountState.hrefThreshold}% threshold met for ${d.coin}, allowing sync`)
+      }
+
       return true
     })
 

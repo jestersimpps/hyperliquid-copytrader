@@ -102,7 +102,7 @@ export class BalanceMonitorService {
         }
 
         await this.telegramService.sendDriftAlert(this.accountId, driftReport)
-        await this.syncService.syncFavorable(driftReport)
+        await this.syncService.syncFavorable(driftReport, trackedValue)
       }
     } catch (error) {
       console.error(`[${this.accountId}] ❌ Balance monitor error:`, error instanceof Error ? error.message : error)
