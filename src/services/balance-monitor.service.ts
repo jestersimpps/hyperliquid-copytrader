@@ -69,6 +69,11 @@ export class BalanceMonitorService {
       this.fillProcessor.setBalanceRatio(balanceRatio)
       this.fillProcessor.setLatestSnapshot(trackedPositions, trackedValue)
 
+      const state = this.telegramService.getAccountState(this.accountId)
+      if (state) {
+        this.fillProcessor.setPositionSizeMultiplier(state.positionSizeMultiplier)
+      }
+
       const snapshot: MonitorSnapshot = {
         trackedBalance,
         trackedPositions,

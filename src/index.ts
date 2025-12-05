@@ -63,7 +63,8 @@ async function main(): Promise<void> {
       hrefModeEnabled: false,
       pausedSymbols: new Map(),
       drawdownPausedSymbols: new Map(),
-      takeProfitMode: false
+      takeProfitMode: false,
+      positionSizeMultiplier: 1
     }
 
     const loggerService = new LoggerService(accountId)

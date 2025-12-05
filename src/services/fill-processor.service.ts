@@ -11,6 +11,7 @@ interface TrackedSnapshot {
 
 export class FillProcessorService {
   private balanceRatio: number = 1
+  private positionSizeMultiplier: number = 1
   private latestSnapshot: TrackedSnapshot | null = null
 
   constructor(
@@ -50,6 +51,10 @@ export class FillProcessorService {
 
   getBalanceRatio(): number {
     return this.balanceRatio
+  }
+
+  setPositionSizeMultiplier(multiplier: number): void {
+    this.positionSizeMultiplier = multiplier
   }
 
   async processFill(fill: UserFillData, connectionId: number): Promise<void> {
@@ -148,8 +153,8 @@ export class FillProcessorService {
     const newSide: 'long' | 'short' = finalPosition > 0 ? 'long' : 'short'
     const prevSide: 'long' | 'short' = prevPosition > 0 ? 'long' : 'short'
 
-    const scaledTradeSize = formatScaledSize(scaleSize(tradeSize, this.balanceRatio))
-    const scaledFinalSize = formatScaledSize(scaleSize(Math.abs(finalPosition), this.balanceRatio))
+    const scaledTradeSize = formatScaledSize(scaleSize(tradeSize, this.balanceRatio) * this.positionSizeMultiplier)
+    const scaledFinalSize = formatScaledSize(scaleSize(Math.abs(finalPosition), this.balanceRatio) * this.positionSizeMultiplier)
 
     const isClose = prevPosition !== 0 && finalPosition === 0
     const isReduce = Math.abs(finalPosition) < Math.abs(prevPosition) && finalPosition !== 0

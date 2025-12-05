@@ -228,6 +228,13 @@ export class TelegramService {
           await this.setTakeProfitMode(accountId, false)
           break
 
+        case 'size':
+          if (parts.length >= 3) {
+            const multiplier = parseFloat(parts[2])
+            await this.setPositionSizeMode(accountId, multiplier)
+          }
+          break
+
         case 'back':
           this.selectedAccountId = null
           await this.sendAccountSelector()
@@ -389,6 +396,14 @@ export class TelegramService {
       : { text: '💰 Enable Take Profit Mode', callback_data: `takeprofit_on:${accountId}` }
 
     keyboard.push([takeProfitButton])
+
+    const sizeMultiplier = state.positionSizeMultiplier
+    keyboard.push([
+      { text: sizeMultiplier === 0.25 ? '✓ ¼x' : '¼x', callback_data: `size:${accountId}:0.25` },
+      { text: sizeMultiplier === 0.5 ? '✓ ½x' : '½x', callback_data: `size:${accountId}:0.5` },
+      { text: sizeMultiplier === 1 ? '✓ 1x' : '1x', callback_data: `size:${accountId}:1` }
+    ])
+
     keyboard.push([{ text: '📊 Status', callback_data: `status:${accountId}` }])
     keyboard.push([{ text: '⬅️ Back', callback_data: 'back' }])
 
@@ -885,6 +900,20 @@ export class TelegramService {
     await this.sendMessage(enabled
       ? `💰 [${data.config.name}] Take profit mode *enabled*\nPositions will auto-close at +1% profit`
       : `💰 [${data.config.name}] Take profit mode *disabled*`)
+    await this.sendAccountMenu(accountId)
+  }
+
+  private async setPositionSizeMode(accountId: string, multiplier: number): Promise<void> {
+    const state = this.accountStates.get(accountId)
+    const data = this.accountSnapshots.get(accountId)
+    if (!state || !data) {
+      await this.sendMessage('⚠️ Account not found')
+      return
+    }
+
+    state.positionSizeMultiplier = multiplier
+    const label = multiplier === 0.25 ? '¼x (Safe)' : multiplier === 0.5 ? '½x (Conservative)' : '1x (Aggressive)'
+    await this.sendMessage(`📊 [${data.config.name}] Position size mode: *${label}*`)
     await this.sendAccountMenu(accountId)
   }
 

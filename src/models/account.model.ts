@@ -33,6 +33,7 @@ export interface SubAccountState {
   pausedSymbols: Map<string, number>
   drawdownPausedSymbols: Map<string, number>
   takeProfitMode: boolean
+  positionSizeMultiplier: number
 }
 
 export interface AccountContext {
