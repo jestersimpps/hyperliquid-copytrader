@@ -13,6 +13,8 @@ export class FillProcessorService {
   private balanceRatio: number = 1
   private positionSizeMultiplier: number = 1
   private latestSnapshot: TrackedSnapshot | null = null
+  private userBalance: number = 0
+  private readonly MIN_BALANCE_TO_TRADE = 10
 
   constructor(
     private accountId: string,
@@ -26,6 +28,10 @@ export class FillProcessorService {
 
   setLatestSnapshot(trackedPositions: Array<{ coin: string; unrealizedPnl: number }>, trackedBalance: number): void {
     this.latestSnapshot = { trackedPositions, trackedBalance }
+  }
+
+  setUserBalance(balance: number): void {
+    this.userBalance = balance
   }
 
   private checkDrawdownResume(coin: string): boolean {
@@ -92,6 +98,11 @@ export class FillProcessorService {
 
     if (this.accountState.tradingPaused) {
       console.log(`   [${this.accountId}] ⏸️ Trading paused, skipping execution`)
+      return
+    }
+
+    if (this.userBalance < this.MIN_BALANCE_TO_TRADE) {
+      console.log(`   [${this.accountId}] 💰 Balance $${this.userBalance.toFixed(2)} < $${this.MIN_BALANCE_TO_TRADE}, skipping execution`)
       return
     }
 

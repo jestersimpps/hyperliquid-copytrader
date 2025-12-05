@@ -4,6 +4,9 @@ import { TelegramService } from './telegram.service'
 import { LoggerService } from './logger.service'
 
 export class SyncService {
+  private userBalance: number = 0
+  private readonly MIN_BALANCE_TO_TRADE = 10
+
   constructor(
     private accountId: string,
     private accountConfig: SubAccountConfig,
@@ -14,9 +17,18 @@ export class SyncService {
     private minOrderValue: number
   ) {}
 
+  setUserBalance(balance: number): void {
+    this.userBalance = balance
+  }
+
   async syncFavorable(driftReport: DriftReport, trackedBalance: number): Promise<void> {
     if (this.accountState.tradingPaused) {
       console.log(`   [${this.accountId}] ⏸️ Trading paused, skipping sync`)
+      return
+    }
+
+    if (this.userBalance < this.MIN_BALANCE_TO_TRADE) {
+      console.log(`   [${this.accountId}] 💰 Balance $${this.userBalance.toFixed(2)} < $${this.MIN_BALANCE_TO_TRADE}, skipping sync`)
       return
     }
 
