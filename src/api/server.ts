@@ -50,7 +50,7 @@ app.get('/api/accounts', (req: Request, res: Response) => {
         id: ctx.id,
         name: ctx.state.name,
         tradingPaused: ctx.state.tradingPaused,
-        hrefModeEnabled: ctx.state.hrefModeEnabled,
+        hrefThreshold: ctx.state.hrefThreshold,
         trackedWallet: configAccount?.trackedWallet || '',
         userWallet: configAccount?.vaultAddress || configAccount?.userWallet || ''
       }
@@ -61,7 +61,7 @@ app.get('/api/accounts', (req: Request, res: Response) => {
       id: a.id,
       name: a.name,
       tradingPaused: false,
-      hrefModeEnabled: false,
+      hrefThreshold: 0,
       trackedWallet: a.trackedWallet,
       userWallet: a.vaultAddress || a.userWallet
     }))

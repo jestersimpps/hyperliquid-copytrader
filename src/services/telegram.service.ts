@@ -138,12 +138,11 @@ export class TelegramService {
           await this.setAccountTradingPaused(accountId, false)
           break
 
-        case 'href_on':
-          await this.setAccountHrefMode(accountId, true)
-          break
-
-        case 'href_off':
-          await this.setAccountHrefMode(accountId, false)
+        case 'href':
+          if (parts.length >= 3) {
+            const threshold = parseInt(parts[2])
+            await this.setHrefThreshold(accountId, threshold)
+          }
           break
 
         case 'status':
@@ -289,7 +288,7 @@ export class TelegramService {
     const keyboard: TelegramBot.InlineKeyboardButton[][] = []
     let messageText = ''
 
-    const statusStr = state.tradingPaused ? '⏸️ PAUSED' : (state.hrefModeEnabled ? '🔗 HREF' : (state.takeProfitMode ? '💰 TP' : '✅ ACTIVE'))
+    const statusStr = state.tradingPaused ? '⏸️ PAUSED' : (state.hrefThreshold > 0 ? `🔗 HREF ${state.hrefThreshold}%` : (state.takeProfitMode ? '💰 TP' : '✅ ACTIVE'))
     messageText = `🎛️ *${data.config.name}* (${statusStr})\n`
     messageText += `Tracking: \`${this.formatAddress(data.config.trackedWallet)}\`\n`
 
@@ -385,11 +384,15 @@ export class TelegramService {
       ? { text: '▶️ Resume Trading', callback_data: `resume:${accountId}` }
       : { text: '⏸️ Pause Trading', callback_data: `pause:${accountId}` }
 
-    const hrefButton = state.hrefModeEnabled
-      ? { text: '⚡ Disable HREF', callback_data: `href_off:${accountId}` }
-      : { text: '🔗 Enable HREF', callback_data: `href_on:${accountId}` }
+    keyboard.push([tradingButton])
 
-    keyboard.push([tradingButton, hrefButton])
+    const hrefThreshold = state.hrefThreshold
+    keyboard.push([
+      { text: hrefThreshold === 0 ? '✓ Off' : 'Off', callback_data: `href:${accountId}:0` },
+      { text: hrefThreshold === 1 ? '✓ 1%' : '1%', callback_data: `href:${accountId}:1` },
+      { text: hrefThreshold === 2 ? '✓ 2%' : '2%', callback_data: `href:${accountId}:2` },
+      { text: hrefThreshold === 5 ? '✓ 5%' : '5%', callback_data: `href:${accountId}:5` }
+    ])
 
     const takeProfitButton = state.takeProfitMode
       ? { text: '💰 Disable Take Profit Mode', callback_data: `takeprofit_off:${accountId}` }
@@ -437,7 +440,7 @@ export class TelegramService {
       totalPositions += posCount
 
       const state = this.accountStates.get(accountId)
-      const statusIcon = state?.tradingPaused ? '⏸️' : (state?.hrefModeEnabled ? '🔗' : '✅')
+      const statusIcon = state?.tradingPaused ? '⏸️' : (state?.hrefThreshold ? '🔗' : '✅')
       const pnlSign = pnl >= 0 ? '+' : ''
 
       message += `${statusIcon} *${data.config.name}*\n`
@@ -509,7 +512,7 @@ export class TelegramService {
 
     for (const [accountId, data] of this.accountSnapshots) {
       const state = this.accountStates.get(accountId)
-      const statusIcon = state?.tradingPaused ? '⏸️' : (state?.hrefModeEnabled ? '🔗' : '✅')
+      const statusIcon = state?.tradingPaused ? '⏸️' : (state?.hrefThreshold ? '🔗' : '✅')
       message += `${statusIcon} *${data.config.name}* (\`${accountId}\`)\n`
       message += `   Tracked: \`${this.formatAddress(data.config.trackedWallet)}\`\n`
       message += `   User: \`${this.formatAddress(data.config.userWallet)}\`\n\n`
@@ -530,16 +533,18 @@ export class TelegramService {
     }
   }
 
-  private async setAccountHrefMode(accountId: string, enabled: boolean): Promise<void> {
+  private async setHrefThreshold(accountId: string, threshold: number): Promise<void> {
     const state = this.accountStates.get(accountId)
-    if (state) {
-      state.hrefModeEnabled = enabled
-      const data = this.accountSnapshots.get(accountId)
-      const name = data?.config.name || accountId
-      await this.sendMessage(enabled
-        ? `🔗 [${name}] HREF mode *enabled*`
-        : `⚡ [${name}] HREF mode *disabled*`)
+    const data = this.accountSnapshots.get(accountId)
+    if (!state || !data) {
+      await this.sendMessage('⚠️ Account not found')
+      return
     }
+
+    state.hrefThreshold = threshold
+    const label = threshold === 0 ? 'Off' : `${threshold}%`
+    await this.sendMessage(`🔗 [${data.config.name}] HREF mode: *${label}*`)
+    await this.sendAccountMenu(accountId)
   }
 
   private async closePositionPercent(accountId: string, coin: string, percent: number): Promise<void> {

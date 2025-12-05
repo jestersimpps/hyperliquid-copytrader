@@ -60,7 +60,7 @@ async function main(): Promise<void> {
       id: accountId,
       name: accountConfig.name,
       tradingPaused: false,
-      hrefModeEnabled: false,
+      hrefThreshold: 0,
       pausedSymbols: new Map(),
       drawdownPausedSymbols: new Map(),
       takeProfitMode: false,

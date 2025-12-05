@@ -29,7 +29,7 @@ export interface SubAccountState {
   id: string
   name: string
   tradingPaused: boolean
-  hrefModeEnabled: boolean
+  hrefThreshold: number
   pausedSymbols: Map<string, number>
   drawdownPausedSymbols: Map<string, number>
   takeProfitMode: boolean

@@ -41,6 +41,16 @@ export class FillProcessorService {
     return pnlPercent < -threshold
   }
 
+  private checkHrefThreshold(coin: string): boolean {
+    if (!this.latestSnapshot) return true
+
+    const trackedPos = this.latestSnapshot.trackedPositions.find(p => p.coin === coin)
+    if (!trackedPos) return true
+
+    const pnlPercent = (trackedPos.unrealizedPnl / this.latestSnapshot.trackedBalance) * 100
+    return pnlPercent < -this.accountState.hrefThreshold
+  }
+
   getAccountId(): string {
     return this.accountId
   }
@@ -106,11 +116,15 @@ export class FillProcessorService {
       this.telegramService.sendMessage(`▶️ [${this.accountState.name}] ${fill.coin} resumed - tracked position at >${drawdownThreshold}% loss`)
     }
 
-    if (this.accountState.hrefModeEnabled) {
+    if (this.accountState.hrefThreshold > 0) {
       const entryActions: TradeAction[] = ['open', 'add', 'reverse']
       if (entryActions.includes(action.action)) {
-        console.log(`   [${this.accountId}] 🔗 HREF mode active, skipping entry`)
-        return
+        const canEnter = this.checkHrefThreshold(fill.coin)
+        if (!canEnter) {
+          console.log(`   [${this.accountId}] 🔗 HREF ${this.accountState.hrefThreshold}% - waiting for drawdown, skipping entry`)
+          return
+        }
+        console.log(`   [${this.accountId}] 🔗 HREF ${this.accountState.hrefThreshold}% threshold met, allowing entry`)
       }
     }
 
