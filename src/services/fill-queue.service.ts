@@ -10,6 +10,7 @@ export class FillQueueService {
   private multiFillProcessor: MultiFillProcessor | null = null
   private riskMonitor: RiskMonitorService | null = null
   private webSocketPool: WebSocketPoolService | null = null
+  private subscriberIds: string[] = []
   private readonly MAX_PROCESSED_TIDS = 1000
 
   setFillProcessor(processor: FillProcessor): void {
@@ -28,13 +29,20 @@ export class FillQueueService {
     this.webSocketPool = pool
   }
 
+  setSubscriberIds(ids: string[]): void {
+    this.subscriberIds = ids
+  }
+
   enqueueFill(fill: UserFillData, connectionId: number): void {
     const tidString = String(fill.tid)
 
     this.webSocketPool?.trackFillReception(tidString, connectionId)
 
     if (this.processedTids.has(tidString)) {
-      console.log(`  ⊘ Duplicate fill dropped (TID: ${fill.tid}, Connection: ${connectionId})`)
+      const accountLabel = this.subscriberIds.length > 0
+        ? `[${this.subscriberIds.join('][')}] `
+        : ''
+      console.log(`  ${accountLabel}⊘ Duplicate fill dropped (TID: ${fill.tid}, Connection: ${connectionId})`)
       return
     }
 

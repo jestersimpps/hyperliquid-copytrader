@@ -44,6 +44,7 @@ export class TrackedWalletManager {
 
     const context = this.wallets.get(normalizedWallet)!
     context.subscribers.set(accountId, { processor, riskMonitor })
+    context.fillQueue.setSubscriberIds(Array.from(context.subscribers.keys()))
     console.log(`✓ Account ${accountId} subscribed to tracked wallet ${trackedWallet.slice(0, 10)}...`)
   }
 
@@ -65,6 +66,7 @@ export class TrackedWalletManager {
     if (!context) return
 
     context.subscribers.delete(accountId)
+    context.fillQueue.setSubscriberIds(Array.from(context.subscribers.keys()))
     console.log(`✓ Account ${accountId} unsubscribed from ${trackedWallet.slice(0, 10)}...`)
 
     if (context.subscribers.size === 0) {
