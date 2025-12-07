@@ -100,6 +100,13 @@ export class WebSocketConnectionService {
       this.subscription.unsubscribe()
       this.subscription = null
     }
+    if (this.wsTransport) {
+      try {
+        await this.wsTransport.close()
+      } catch (err) {
+        console.error(`Connection ${this.connectionId}: Error closing transport:`, err instanceof Error ? err.message : err)
+      }
+    }
     this.eventClient = null
     this.wsTransport = null
   }
