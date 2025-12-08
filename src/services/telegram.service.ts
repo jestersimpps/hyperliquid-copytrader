@@ -1061,9 +1061,7 @@ export class TelegramService {
     const vaultAddress = data?.config.vaultAddress || ''
     const tradeLink = vaultAddress ? `\n\n[View on Hyperformance](https://hyperformance.xyz/trade?${vaultAddress})` : ''
     await this.sendMessage(
-      `⚠️ *[${name}] Large Position Size*\n\n` +
-      `${coin} position is ${sizePercent.toFixed(1)}% of account value\n` +
-      `Size: $${notionalValue.toLocaleString('en-US', { maximumFractionDigits: 0 })}` +
+      `⚠️ ${coin} is ${sizePercent.toFixed(0)}% of ${name} ($${notionalValue.toLocaleString('en-US', { maximumFractionDigits: 0 })})` +
       tradeLink
     )
   }
@@ -1076,8 +1074,7 @@ export class TelegramService {
     const sign = pnl >= 0 ? '+' : ''
     const tradeLink = vaultAddress ? `\n\n[View on Hyperformance](https://hyperformance.xyz/trade?${vaultAddress})` : ''
     await this.sendMessage(
-      `⚠️ *[${name}] High Position PnL*\n\n` +
-      `${coin} position PnL: ${sign}$${pnl.toFixed(2)} (${pnlPercent.toFixed(1)}% of balance)` +
+      `⚠️ ${coin} PnL: ${sign}$${pnl.toFixed(0)} (${pnlPercent.toFixed(0)}% of ${name})` +
       tradeLink
     )
   }
