@@ -265,6 +265,7 @@ app.get('/api/balance-history', (req: Request, res: Response) => {
     const daysParam = req.query.days as string
     const numDays = daysParam ? parseInt(daysParam) : 10
     const balanceHistory: Array<{ timestamp: number; balance: number }> = []
+    const trackedHistory: Array<{ timestamp: number; balance: number }> = []
     const today = new Date()
 
     const dataDir = accountId ? path.join(DATA_DIR, accountId) : DATA_DIR
@@ -285,12 +286,17 @@ app.get('/api/balance-history', (req: Request, res: Response) => {
             timestamp: snapshot.timestamp,
             balance: snapshot.user?.accountValue || 0
           })
+          trackedHistory.push({
+            timestamp: snapshot.timestamp,
+            balance: snapshot.tracked?.accountValue || 0
+          })
         }
       }
     }
 
     balanceHistory.sort((a, b) => a.timestamp - b.timestamp)
-    res.json({ history: balanceHistory, count: balanceHistory.length, accountId: accountId || 'default' })
+    trackedHistory.sort((a, b) => a.timestamp - b.timestamp)
+    res.json({ history: balanceHistory, trackedHistory, count: balanceHistory.length, accountId: accountId || 'default' })
   } catch (error) {
     res.status(500).json({ error: 'Failed to read balance history' })
   }

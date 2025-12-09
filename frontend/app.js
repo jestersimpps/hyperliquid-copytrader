@@ -5,6 +5,7 @@ let allTrades = [];
 let trackedFills = [];
 let dailySummaryData = [];
 let balanceHistoryData = [];
+let trackedBalanceHistoryData = [];
 let allBalanceHistory = {};
 let selectedDate = new Date().toISOString().split('T')[0];
 let chartInstances = {};
@@ -1166,6 +1167,7 @@ async function fetchSnapshots(date = null) {
     trackedFills = trackedFillsData.fills || [];
     dailySummaryData = summaryData.days || [];
     balanceHistoryData = balanceHistoryDataRes.history || [];
+    trackedBalanceHistoryData = balanceHistoryDataRes.trackedHistory || [];
 
     if (filteredSnapshots.length === 0) {
       showNoData(targetDate);
@@ -1236,6 +1238,61 @@ function renderBalanceHistoryChart() {
         data: balances,
         borderColor: '#00d4ff',
         backgroundColor: 'rgba(0, 212, 255, 0.15)',
+        fill: true,
+        borderWidth: 2,
+        tension: 0.1,
+        pointRadius: 0
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#192734',
+          callbacks: { label: ctx => `$${ctx.parsed.y.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` }
+        }
+      },
+      scales: {
+        x: {
+          type: 'time',
+          time: { unit: 'day', displayFormats: { day: 'MMM d' } },
+          ticks: { color: '#8899a6', maxTicksLimit: 10 },
+          grid: { color: '#38444d' }
+        },
+        y: {
+          min: minBalance - padding,
+          max: maxBalance + padding,
+          ticks: { color: '#8899a6', callback: v => '$' + v.toLocaleString() },
+          grid: { color: '#38444d' }
+        }
+      }
+    }
+  });
+
+  renderTrackedBalanceHistoryChart();
+}
+
+function renderTrackedBalanceHistoryChart() {
+  if (trackedBalanceHistoryData.length === 0) return;
+
+  const timestamps = trackedBalanceHistoryData.map(d => new Date(d.timestamp));
+  const balances = trackedBalanceHistoryData.map(d => d.balance);
+  const minBalance = Math.min(...balances);
+  const maxBalance = Math.max(...balances);
+  const padding = (maxBalance - minBalance) * 0.1 || 100;
+
+  if (chartInstances['tracked-balance-history-chart']) chartInstances['tracked-balance-history-chart'].destroy();
+  chartInstances['tracked-balance-history-chart'] = new Chart(document.getElementById('tracked-balance-history-chart').getContext('2d'), {
+    type: 'line',
+    data: {
+      labels: timestamps,
+      datasets: [{
+        label: 'Balance',
+        data: balances,
+        borderColor: '#f7931a',
+        backgroundColor: 'rgba(247, 147, 26, 0.15)',
         fill: true,
         borderWidth: 2,
         tension: 0.1,
