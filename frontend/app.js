@@ -892,60 +892,12 @@ function renderAccountsSummaryGrid(accountSummaries) {
     const pnl = summary.unrealizedPnl || 0;
     const pnlClass = pnl >= 0 ? 'positive' : 'negative';
     const pnlSign = pnl >= 0 ? '+' : '';
-    const positions = summary.positions || [];
+    const positionCount = summary.positions?.count || 0;
+    const totalNotional = summary.positions?.totalNotional || 0;
     const accountTpm = ((summary.tradesLast10Min || 0) / 10).toFixed(1);
-    const trackedPositions = summary.trackedPositions || [];
-    const trackedByCoins = {};
-    for (const pos of trackedPositions) trackedByCoins[pos.coin] = pos;
     const realizedBalance = summary.balance - pnl;
 
-    const maxNotional = Math.max(...positions.map(p => Math.abs(p.notionalValue || 0)), 1);
-
-    let positionsHtml = '';
-    if (positions.length > 0) {
-      positionsHtml = '<div class="summary-card-positions-list">';
-      for (const pos of positions) {
-        const posPnl = pos.unrealizedPnl || 0;
-        const posPnlClass = posPnl >= 0 ? 'positive' : 'negative';
-        const posPnlSign = posPnl >= 0 ? '+' : '';
-        const sideClass = pos.side === 'long' ? 'long' : 'short';
-        const notional = Math.abs(pos.notionalValue || 0);
-        const barPct = (notional / maxNotional) * 50;
-        const barColor = getSymbolColor(pos.coin);
-        const barStyle = pos.side === 'long'
-          ? `left: 50%; width: ${barPct}%;`
-          : `right: 50%; width: ${barPct}%;`;
-        const sideLabel = pos.side === 'long' ? 'LONG' : 'SHORT';
-        const labelPosition = pos.side === 'long' ? 'left: 51%;' : 'right: 51%;';
-        positionsHtml += `
-          <div class="summary-position-row">
-            <div class="summary-position-coin">${pos.coin}</div>
-            <div class="summary-position-bar-container">
-              <div class="summary-position-bar" style="background: ${barColor}; ${barStyle}"></div>
-              <span class="summary-position-bar-label" style="${labelPosition}">${sideLabel}</span>
-            </div>
-            <div class="summary-position-details">
-              <div class="summary-position-size">$${notional.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</div>
-              <div class="summary-position-pnl ${posPnlClass}">${posPnlSign}$${Math.abs(posPnl).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-            </div>
-          </div>
-        `;
-      }
-      positionsHtml += '</div>';
-    }
-
-    const pieChartId = `allocation-pie-${summary.accountId}`;
     const historyChartId = `history-mini-${summary.accountId}`;
-
-    let contentHtml = '';
-    if (positions.length > 0) {
-      contentHtml = `
-        <div class="summary-card-content">
-          <div class="allocation-pie-chart"><canvas id="${pieChartId}"></canvas></div>
-          ${positionsHtml}
-        </div>
-      `;
-    }
 
     card.innerHTML = `
       <div class="summary-card-top">
@@ -957,17 +909,12 @@ function renderAccountsSummaryGrid(accountSummaries) {
           </div>
           <div class="summary-card-balance">$${realizedBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
           <div class="summary-card-pnl ${pnlClass}">Unrealized: ${pnlSign}$${Math.abs(pnl).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-          <div class="summary-card-positions">${positions.length} positions · ${accountTpm} tpm</div>
+          <div class="summary-card-positions">${positionCount} positions · $${totalNotional.toLocaleString(undefined, { maximumFractionDigits: 0 })} · ${accountTpm} tpm</div>
         </div>
       </div>
-      ${contentHtml}
     `;
 
     container.appendChild(card);
-
-    if (positions.length > 0) {
-      renderAllocationPieChart(pieChartId, positions, summary.balance);
-    }
     renderAccountMiniChart(historyChartId, summary.accountId);
   }
 }

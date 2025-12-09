@@ -71,6 +71,43 @@ app.get('/api/accounts', (req: Request, res: Response) => {
   }
 })
 
+function slimPosition(p: Record<string, unknown>): Record<string, unknown> {
+  return {
+    coin: p.coin,
+    side: p.side,
+    unrealizedPnl: p.unrealizedPnl || 0,
+    notionalValue: p.notionalValue || 0,
+    entryPrice: p.entryPrice || 0
+  }
+}
+
+function slimSnapshot(snapshot: Record<string, unknown>): Record<string, unknown> {
+  const result: Record<string, unknown> = {
+    timestamp: snapshot.timestamp,
+    date: snapshot.date
+  }
+
+  if (snapshot.user && typeof snapshot.user === 'object') {
+    const user = snapshot.user as Record<string, unknown>
+    const positions = (user.positions as Array<Record<string, unknown>>) || []
+    result.user = {
+      accountValue: user.accountValue,
+      positions: positions.map(slimPosition)
+    }
+  }
+
+  if (snapshot.tracked && typeof snapshot.tracked === 'object') {
+    const tracked = snapshot.tracked as Record<string, unknown>
+    const positions = (tracked.positions as Array<Record<string, unknown>>) || []
+    result.tracked = {
+      accountValue: tracked.accountValue,
+      positions: positions.map(slimPosition)
+    }
+  }
+
+  return result
+}
+
 app.get('/api/snapshots', (req: Request, res: Response) => {
   try {
     const accountId = req.query.account as string
@@ -89,67 +126,12 @@ app.get('/api/snapshots', (req: Request, res: Response) => {
       .trim()
       .split('\n')
       .filter(line => line)
-      .map(line => {
-        const snapshot = JSON.parse(line)
-        enrichSnapshot(snapshot)
-        return snapshot
-      })
-      .sort((a, b) => a.timestamp - b.timestamp)
+      .map(line => slimSnapshot(JSON.parse(line)))
+      .sort((a, b) => (a.timestamp as number) - (b.timestamp as number))
 
     res.json({ snapshots, count: snapshots.length, date: targetDate, accountId: accountId || 'default' })
   } catch (error) {
     res.status(500).json({ error: 'Failed to read snapshots' })
-  }
-})
-
-app.get('/api/user-snapshots', (req: Request, res: Response) => {
-  try {
-    const accountId = req.query.account as string
-    const dateParam = req.query.date as string
-    const targetDate = dateParam || new Date().toISOString().split('T')[0]
-
-    const dataDir = accountId ? path.join(DATA_DIR, accountId) : DATA_DIR
-    const filePath = path.join(dataDir, `snapshots-${targetDate}.jsonl`)
-
-    if (!fs.existsSync(filePath)) {
-      return res.json({ snapshots: [], count: 0, date: targetDate, accountId: accountId || 'default' })
-    }
-
-    const content = fs.readFileSync(filePath, 'utf-8')
-    const snapshots = content
-      .trim()
-      .split('\n')
-      .filter(line => line)
-      .map(line => {
-        const snapshot = JSON.parse(line)
-        if (snapshot.user) {
-          const positions = snapshot.user.positions || []
-          const totalUnrealizedPnl = positions.reduce(
-            (sum: number, p: { unrealizedPnl?: number }) => sum + (p.unrealizedPnl || 0),
-            0
-          )
-          const totalMarginUsed = positions.reduce(
-            (sum: number, p: { marginUsed?: number }) => sum + (p.marginUsed || 0),
-            0
-          )
-          return {
-            timestamp: snapshot.timestamp,
-            date: snapshot.date,
-            wallet: {
-              ...snapshot.user,
-              totalUnrealizedPnl,
-              totalMarginUsed
-            }
-          }
-        }
-        return null
-      })
-      .filter(s => s !== null)
-      .sort((a, b) => a.timestamp - b.timestamp)
-
-    res.json({ snapshots, count: snapshots.length, date: targetDate, accountId: accountId || 'default' })
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to read user snapshots' })
   }
 })
 
@@ -164,6 +146,14 @@ function slimTrade(t: Record<string, unknown>, accountId?: string): Record<strin
   }
   if (accountId) slim.accountId = accountId
   return slim
+}
+
+function slimFill(f: Record<string, unknown>): Record<string, unknown> {
+  return {
+    timestamp: f.timestamp,
+    coin: f.coin,
+    closedPnl: f.closedPnl || 0
+  }
 }
 
 app.get('/api/trades', (req: Request, res: Response) => {
@@ -248,8 +238,8 @@ app.get('/api/tracked-fills', (req: Request, res: Response) => {
       .trim()
       .split('\n')
       .filter(line => line)
-      .map(line => JSON.parse(line))
-      .sort((a, b) => a.timestamp - b.timestamp)
+      .map(line => slimFill(JSON.parse(line)))
+      .sort((a, b) => (a.timestamp as number) - (b.timestamp as number))
 
     res.json({ fills, count: fills.length, date: targetDate, accountId: accountId || 'default' })
   } catch (error) {
@@ -399,15 +389,9 @@ app.get('/api/daily-summary', (req: Request, res: Response) => {
   }
 })
 
-interface PositionSummary {
-  coin: string
-  side: string
-  size: number
-  notionalValue: number
-  entryPrice: number
-  markPrice: number
-  unrealizedPnl: number
-  leverage: number
+interface PositionAggregate {
+  count: number
+  totalNotional: number
 }
 
 interface AccountSummary {
@@ -416,8 +400,8 @@ interface AccountSummary {
   trackedWallet: string
   balance: number
   unrealizedPnl: number
-  positions: PositionSummary[]
-  trackedPositions: PositionSummary[]
+  positions: PositionAggregate
+  trackedPositions: PositionAggregate
   tradingPaused: boolean
   tradesLast10Min: number
 }
@@ -449,27 +433,9 @@ app.get('/api/summary', async (req: Request, res: Response) => {
     if (accountContexts.size > 0) {
       for (const [accountId, ctx] of accountContexts) {
         const snapshot = await ctx.balanceMonitor.getSnapshot()
-        const positions: PositionSummary[] = snapshot?.userPositions.map(p => ({
-          coin: p.coin,
-          side: p.side,
-          size: p.size,
-          notionalValue: p.notionalValue,
-          entryPrice: p.entryPrice,
-          markPrice: p.markPrice,
-          unrealizedPnl: p.unrealizedPnl,
-          leverage: p.leverage
-        })) || []
-        const trackedPositions: PositionSummary[] = snapshot?.trackedPositions.map(p => ({
-          coin: p.coin,
-          side: p.side,
-          size: p.size,
-          notionalValue: p.notionalValue,
-          entryPrice: p.entryPrice,
-          markPrice: p.markPrice,
-          unrealizedPnl: p.unrealizedPnl,
-          leverage: p.leverage
-        })) || []
-        const unrealizedPnl = positions.reduce((sum, p) => sum + p.unrealizedPnl, 0)
+        const userPositions = snapshot?.userPositions || []
+        const trackedPositionsList = snapshot?.trackedPositions || []
+        const unrealizedPnl = userPositions.reduce((sum, p) => sum + p.unrealizedPnl, 0)
         const configAccount = globalConfig.accounts.find(a => a.id === accountId)
         summaries.push({
           accountId,
@@ -477,8 +443,14 @@ app.get('/api/summary', async (req: Request, res: Response) => {
           trackedWallet: configAccount?.trackedWallet || '',
           balance: snapshot ? parseFloat(snapshot.userBalance.accountValue) : 0,
           unrealizedPnl,
-          positions,
-          trackedPositions,
+          positions: {
+            count: userPositions.length,
+            totalNotional: userPositions.reduce((sum, p) => sum + p.notionalValue, 0)
+          },
+          trackedPositions: {
+            count: trackedPositionsList.length,
+            totalNotional: trackedPositionsList.reduce((sum, p) => sum + p.notionalValue, 0)
+          },
           tradingPaused: ctx.state.tradingPaused,
           tradesLast10Min: getTradesLast10Min(accountId)
         })
@@ -488,8 +460,8 @@ app.get('/api/summary', async (req: Request, res: Response) => {
       for (const account of globalConfig.accounts.filter(a => a.enabled)) {
         const filePath = path.join(DATA_DIR, account.id, `snapshots-${today}.jsonl`)
         let balance = 0
-        let positions: PositionSummary[] = []
-        let trackedPositions: PositionSummary[] = []
+        let positions: PositionAggregate = { count: 0, totalNotional: 0 }
+        let trackedPositions: PositionAggregate = { count: 0, totalNotional: 0 }
         let unrealizedPnl = 0
         if (fs.existsSync(filePath)) {
           const content = fs.readFileSync(filePath, 'utf-8')
@@ -497,27 +469,17 @@ app.get('/api/summary', async (req: Request, res: Response) => {
           if (lines.length > 0) {
             const lastSnapshot = JSON.parse(lines[lines.length - 1])
             balance = lastSnapshot.user?.accountValue || 0
-            positions = (lastSnapshot.user?.positions || []).map((p: Record<string, unknown>) => ({
-              coin: p.coin,
-              side: p.side,
-              size: p.size,
-              notionalValue: p.notionalValue,
-              entryPrice: p.entryPrice,
-              markPrice: p.markPrice,
-              unrealizedPnl: p.unrealizedPnl || 0,
-              leverage: p.leverage
-            }))
-            trackedPositions = (lastSnapshot.tracked?.positions || []).map((p: Record<string, unknown>) => ({
-              coin: p.coin,
-              side: p.side,
-              size: p.size,
-              notionalValue: p.notionalValue,
-              entryPrice: p.entryPrice,
-              markPrice: p.markPrice,
-              unrealizedPnl: p.unrealizedPnl || 0,
-              leverage: p.leverage
-            }))
-            unrealizedPnl = positions.reduce((sum, p) => sum + p.unrealizedPnl, 0)
+            const userPos = lastSnapshot.user?.positions || []
+            const trackedPos = lastSnapshot.tracked?.positions || []
+            positions = {
+              count: userPos.length,
+              totalNotional: userPos.reduce((sum: number, p: Record<string, unknown>) => sum + ((p.notionalValue as number) || 0), 0)
+            }
+            trackedPositions = {
+              count: trackedPos.length,
+              totalNotional: trackedPos.reduce((sum: number, p: Record<string, unknown>) => sum + ((p.notionalValue as number) || 0), 0)
+            }
+            unrealizedPnl = userPos.reduce((sum: number, p: Record<string, unknown>) => sum + ((p.unrealizedPnl as number) || 0), 0)
           }
         }
         summaries.push({
@@ -535,7 +497,7 @@ app.get('/api/summary', async (req: Request, res: Response) => {
     }
 
     const totalBalance = summaries.reduce((sum, s) => sum + s.balance, 0)
-    const totalPositions = summaries.reduce((sum, s) => sum + s.positions.length, 0)
+    const totalPositions = summaries.reduce((sum, s) => sum + s.positions.count, 0)
     const totalUnrealizedPnl = summaries.reduce((sum, s) => sum + s.unrealizedPnl, 0)
     const totalTradesLast10Min = summaries.reduce((sum, s) => sum + s.tradesLast10Min, 0)
 
@@ -553,46 +515,6 @@ app.get('/api/summary', async (req: Request, res: Response) => {
     res.status(500).json({ error: 'Failed to get summary' })
   }
 })
-
-function enrichSnapshot(snapshot: Record<string, unknown>): void {
-  if (snapshot.user && typeof snapshot.user === 'object') {
-    const user = snapshot.user as Record<string, unknown>
-    const userPositions = (user.positions as Array<Record<string, unknown>>) || []
-    user.totalUnrealizedPnl = userPositions.reduce(
-      (sum: number, p) => sum + ((p.unrealizedPnl as number) || 0),
-      0
-    )
-    user.totalMarginUsed = userPositions.reduce(
-      (sum: number, p) => sum + ((p.marginUsed as number) || 0),
-      0
-    )
-    user.averageLeverage = userPositions.length > 0
-      ? userPositions.reduce((sum: number, p) => sum + ((p.leverage as number) || 0), 0) / userPositions.length
-      : 0
-    user.crossMarginRatio = (user.accountValue as number) > 0
-      ? ((user.totalMarginUsed as number) / (user.accountValue as number)) * 100
-      : 0
-  }
-
-  if (snapshot.tracked && typeof snapshot.tracked === 'object') {
-    const tracked = snapshot.tracked as Record<string, unknown>
-    const trackedPositions = (tracked.positions as Array<Record<string, unknown>>) || []
-    tracked.totalUnrealizedPnl = trackedPositions.reduce(
-      (sum: number, p) => sum + ((p.unrealizedPnl as number) || 0),
-      0
-    )
-    tracked.totalMarginUsed = trackedPositions.reduce(
-      (sum: number, p) => sum + ((p.marginUsed as number) || 0),
-      0
-    )
-    tracked.averageLeverage = trackedPositions.length > 0
-      ? trackedPositions.reduce((sum: number, p) => sum + ((p.leverage as number) || 0), 0) / trackedPositions.length
-      : 0
-    tracked.crossMarginRatio = (tracked.accountValue as number) > 0
-      ? ((tracked.totalMarginUsed as number) / (tracked.accountValue as number)) * 100
-      : 0
-  }
-}
 
 export function startServer(contexts: Map<string, AccountContext>): void {
   accountContexts = contexts
