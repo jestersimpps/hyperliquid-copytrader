@@ -1637,10 +1637,12 @@ function renderTrackedPositionsTable(trackedPositions) {
   const maxNotional = Math.max(...trackedPositions.map(p => Math.abs(p.notionalValue || 0)), 1);
 
   let tableHtml = `<table class="positions-table"><thead><tr><th>Coin</th><th style="width: 200px;">Size</th><th>Entry</th><th>PNL</th></tr></thead><tbody>`;
+  let mobileHtml = '<div class="positions-mobile">';
 
   for (const pos of trackedPositions) {
     const isLong = pos.side === 'long';
     const direction = isLong ? 'LONG' : 'SHORT';
+    const directionClass = isLong ? 'direction-long' : 'direction-short';
     const pnl = pos.unrealizedPnl || 0;
     const pnlClass = pnl >= 0 ? 'positive' : 'negative';
     const pnlSign = pnl >= 0 ? '+' : '';
@@ -1658,10 +1660,33 @@ function renderTrackedPositionsTable(trackedPositions) {
     const sizeBarHtml = `<div class="position-size-bar-container"><div class="position-size-bar" style="background: ${barColor}; ${barStyle}"></div><span class="position-size-bar-label" style="${labelPosition}">${direction}</span><span class="position-size-bar-value" style="${isLong ? 'right: 51%;' : 'left: 51%;'}">${sizeFormatted}</span></div>`;
 
     tableHtml += `<tr><td>${pos.coin}</td><td>${sizeBarHtml}</td><td>${entryFormatted}</td><td class="${pnlClass}">${pnlSign}$${Math.abs(pnl).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td></tr>`;
+
+    mobileHtml += `
+      <div class="position-card">
+        <div class="position-card-header">
+          <div class="position-card-coin">
+            <span>${pos.coin}</span>
+            <span class="${directionClass}">${direction}</span>
+          </div>
+          <div class="position-card-pnl ${pnlClass}">${pnlSign}$${Math.abs(pnl).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
+        </div>
+        <div class="position-card-details">
+          <div class="position-card-row">
+            <span class="position-card-label">Size</span>
+            <span class="position-card-value">${sizeFormatted}</span>
+          </div>
+          <div class="position-card-row">
+            <span class="position-card-label">Entry</span>
+            <span class="position-card-value">${entryFormatted}</span>
+          </div>
+        </div>
+      </div>
+    `;
   }
 
   tableHtml += '</tbody></table>';
-  container.innerHTML = tableHtml;
+  mobileHtml += '</div>';
+  container.innerHTML = tableHtml + mobileHtml;
 }
 
 function renderPositionAllocationChart() {
