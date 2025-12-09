@@ -153,6 +153,19 @@ app.get('/api/user-snapshots', (req: Request, res: Response) => {
   }
 })
 
+function slimTrade(t: Record<string, unknown>, accountId?: string): Record<string, unknown> {
+  const slim: Record<string, unknown> = {
+    timestamp: t.timestamp,
+    coin: t.coin,
+    side: t.side,
+    size: t.size,
+    price: t.price,
+    realizedPnl: t.realizedPnl || 0
+  }
+  if (accountId) slim.accountId = accountId
+  return slim
+}
+
 app.get('/api/trades', (req: Request, res: Response) => {
   try {
     const accountId = req.query.account as string
@@ -187,7 +200,7 @@ app.get('/api/trades', (req: Request, res: Response) => {
               .trim()
               .split('\n')
               .filter(line => line)
-              .map(line => ({ ...JSON.parse(line), accountId: accId }))
+              .map(line => slimTrade(JSON.parse(line), accId))
             trades.push(...accTrades)
           }
         }
@@ -203,25 +216,8 @@ app.get('/api/trades', (req: Request, res: Response) => {
             .trim()
             .split('\n')
             .filter(line => line)
-            .map(line => JSON.parse(line))
+            .map(line => slimTrade(JSON.parse(line)))
           trades.push(...dateTrades)
-        }
-      }
-
-      if (trades.length === 0) {
-        const legacyFilePath = path.join(dataDir, 'trades.jsonl')
-        if (fs.existsSync(legacyFilePath)) {
-          const content = fs.readFileSync(legacyFilePath, 'utf-8')
-          const allTrades = content
-            .trim()
-            .split('\n')
-            .filter(line => line)
-            .map(line => JSON.parse(line))
-
-          trades = allTrades.filter(t => {
-            const tradeDate = new Date(t.timestamp).toISOString().split('T')[0]
-            return dates.includes(tradeDate)
-          })
         }
       }
     }
