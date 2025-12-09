@@ -92,11 +92,15 @@ export class RiskMonitorService {
     const timeSinceLastFill = now - this.state.lastFillTime
 
     if (timeSinceLastFill > this.NO_FILLS_THRESHOLD_MS) {
+      const minutesSinceLastFill = Math.floor(timeSinceLastFill / 60000)
+
       if (now - this.state.lastNoFillsAlert > this.ALERT_COOLDOWN_MS) {
         this.state.lastNoFillsAlert = now
-        const minutesSinceLastFill = Math.floor(timeSinceLastFill / 60000)
         await this.telegramService.sendNoFillsAlert(this.accountId, minutesSinceLastFill, this.state.lastFillTime)
       }
+
+      console.log(`\n🔄 [${this.accountId}] No fills for ${minutesSinceLastFill} minutes, restarting...`)
+      process.exit(1)
     }
   }
 }
