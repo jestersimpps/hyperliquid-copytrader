@@ -1277,6 +1277,9 @@ function renderBalanceHistoryChart() {
 function renderTrackedBalanceHistoryChart() {
   if (trackedBalanceHistoryData.length === 0) return;
 
+  const canvas = document.getElementById('tracked-balance-history-chart');
+  if (!canvas) return;
+
   const timestamps = trackedBalanceHistoryData.map(d => new Date(d.timestamp));
   const balances = trackedBalanceHistoryData.map(d => d.balance);
   const minBalance = Math.min(...balances);
@@ -1284,7 +1287,7 @@ function renderTrackedBalanceHistoryChart() {
   const padding = (maxBalance - minBalance) * 0.1 || 100;
 
   if (chartInstances['tracked-balance-history-chart']) chartInstances['tracked-balance-history-chart'].destroy();
-  chartInstances['tracked-balance-history-chart'] = new Chart(document.getElementById('tracked-balance-history-chart').getContext('2d'), {
+  chartInstances['tracked-balance-history-chart'] = new Chart(canvas.getContext('2d'), {
     type: 'line',
     data: {
       labels: timestamps,
