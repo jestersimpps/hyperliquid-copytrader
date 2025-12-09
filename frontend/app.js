@@ -4,8 +4,6 @@ let filteredSnapshots = [];
 let allTrades = [];
 let trackedFills = [];
 let dailySummaryData = [];
-let balanceHistoryData = [];
-let trackedBalanceHistoryData = [];
 let allBalanceHistory = {};
 let selectedDate = new Date().toISOString().split('T')[0];
 let chartInstances = {};
@@ -21,12 +19,6 @@ let summaryPingIntervals = [];
 let soundEnabled = false;
 let fillSound = null;
 
-async function fetchBalanceHistory(accountId, days = 10) {
-  const accountParam = accountId ? `&account=${accountId}` : '';
-  const res = await fetch(`/api/balance-history?days=${days}${accountParam}`);
-  const data = await res.json();
-  return { history: data.history || [], trackedHistory: data.trackedHistory || [] };
-}
 
 const SYMBOL_COLORS = [
   '#667eea', '#17bf63', '#e0245e', '#ffad1f', '#1da1f2', '#f91880',
@@ -1102,14 +1094,11 @@ async function fetchSnapshots(date = null) {
     const targetDate = date || selectedDate;
     const accountParam = currentAccountId && currentAccountId !== 'summary' ? `&account=${currentAccountId}` : '';
 
-    const accountIdForFetch = currentAccountId && currentAccountId !== 'summary' ? currentAccountId : null;
-
-    const [snapshotsRes, tradesRes, trackedFillsRes, summaryRes, balanceHistoryDataRes] = await Promise.all([
+    const [snapshotsRes, tradesRes, trackedFillsRes, summaryRes] = await Promise.all([
       fetch(`/api/snapshots?date=${targetDate}${accountParam}`),
       fetch(`/api/trades?date=${targetDate}${accountParam}`),
       fetch(`/api/tracked-fills?date=${targetDate}${accountParam}`),
-      fetch(`/api/daily-summary?days=10${accountParam}`),
-      fetchBalanceHistory(accountIdForFetch, 10)
+      fetch(`/api/daily-summary?days=10${accountParam}`)
     ]);
 
     const snapshotsData = await snapshotsRes.json();
@@ -1121,8 +1110,6 @@ async function fetchSnapshots(date = null) {
     allTrades = tradesData.trades || [];
     trackedFills = trackedFillsData.fills || [];
     dailySummaryData = summaryData.days || [];
-    balanceHistoryData = balanceHistoryDataRes.history || [];
-    trackedBalanceHistoryData = balanceHistoryDataRes.trackedHistory || [];
 
     if (filteredSnapshots.length === 0) {
       showNoData(targetDate);
@@ -1141,7 +1128,6 @@ function showNoData(date) {
   document.getElementById('tracked-positions-container').innerHTML = '<div class="no-positions">No open positions</div>';
   updateSelectedDateDisplay(date);
   renderDailyCards();
-  renderBalanceHistoryChart();
 }
 
 async function filterByDay(dateStr) {
@@ -1161,7 +1147,6 @@ function renderDashboard() {
 
   document.getElementById('error').style.display = 'none';
 
-  renderBalanceHistoryChart();
   renderDailyCards();
   updateStats();
   renderPositionsTable();
@@ -1172,117 +1157,6 @@ function renderDashboard() {
   renderRealizedPnlChart();
   renderDrawdownChart();
   renderRiskChart();
-}
-
-function renderBalanceHistoryChart() {
-  if (balanceHistoryData.length === 0) return;
-
-  const timestamps = balanceHistoryData.map(d => new Date(d.timestamp));
-  const balances = balanceHistoryData.map(d => d.balance);
-  const minBalance = Math.min(...balances);
-  const maxBalance = Math.max(...balances);
-  const padding = (maxBalance - minBalance) * 0.1 || 100;
-
-  if (chartInstances['balance-history-chart']) chartInstances['balance-history-chart'].destroy();
-  chartInstances['balance-history-chart'] = new Chart(document.getElementById('balance-history-chart').getContext('2d'), {
-    type: 'line',
-    data: {
-      labels: timestamps,
-      datasets: [{
-        label: 'Balance',
-        data: balances,
-        borderColor: '#00d4ff',
-        backgroundColor: 'rgba(0, 212, 255, 0.15)',
-        fill: true,
-        borderWidth: 2,
-        tension: 0.1,
-        pointRadius: 0
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          backgroundColor: '#192734',
-          callbacks: { label: ctx => `$${ctx.parsed.y.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` }
-        }
-      },
-      scales: {
-        x: {
-          type: 'time',
-          time: { unit: 'day', displayFormats: { day: 'MMM d' } },
-          ticks: { color: '#8899a6', maxTicksLimit: 10 },
-          grid: { color: '#38444d' }
-        },
-        y: {
-          min: minBalance - padding,
-          max: maxBalance + padding,
-          ticks: { color: '#8899a6', callback: v => '$' + v.toLocaleString() },
-          grid: { color: '#38444d' }
-        }
-      }
-    }
-  });
-
-  renderTrackedBalanceHistoryChart();
-}
-
-function renderTrackedBalanceHistoryChart() {
-  if (trackedBalanceHistoryData.length === 0) return;
-
-  const canvas = document.getElementById('tracked-balance-history-chart');
-  if (!canvas) return;
-
-  const timestamps = trackedBalanceHistoryData.map(d => new Date(d.timestamp));
-  const balances = trackedBalanceHistoryData.map(d => d.balance);
-  const minBalance = Math.min(...balances);
-  const maxBalance = Math.max(...balances);
-  const padding = (maxBalance - minBalance) * 0.1 || 100;
-
-  if (chartInstances['tracked-balance-history-chart']) chartInstances['tracked-balance-history-chart'].destroy();
-  chartInstances['tracked-balance-history-chart'] = new Chart(canvas.getContext('2d'), {
-    type: 'line',
-    data: {
-      labels: timestamps,
-      datasets: [{
-        label: 'Balance',
-        data: balances,
-        borderColor: '#f7931a',
-        backgroundColor: 'rgba(247, 147, 26, 0.15)',
-        fill: true,
-        borderWidth: 2,
-        tension: 0.1,
-        pointRadius: 0
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          backgroundColor: '#192734',
-          callbacks: { label: ctx => `$${ctx.parsed.y.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` }
-        }
-      },
-      scales: {
-        x: {
-          type: 'time',
-          time: { unit: 'day', displayFormats: { day: 'MMM d' } },
-          ticks: { color: '#8899a6', maxTicksLimit: 10 },
-          grid: { color: '#38444d' }
-        },
-        y: {
-          min: minBalance - padding,
-          max: maxBalance + padding,
-          ticks: { color: '#8899a6', callback: v => '$' + v.toLocaleString() },
-          grid: { color: '#38444d' }
-        }
-      }
-    }
-  });
 }
 
 function updateStats() {
