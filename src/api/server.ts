@@ -138,12 +138,25 @@ app.get('/api/snapshots', (req: Request, res: Response) => {
     }
 
     const content = fs.readFileSync(filePath, 'utf-8')
-    const snapshots = content
+    const allSnapshots = content
       .trim()
       .split('\n')
       .filter(line => line)
       .map(line => slimSnapshot(JSON.parse(line)))
       .sort((a, b) => (a.timestamp as number) - (b.timestamp as number))
+
+    const snapshots: Array<Record<string, unknown>> = []
+    let lastTimestamp = 0
+    for (const snap of allSnapshots) {
+      const ts = snap.timestamp as number
+      if (ts - lastTimestamp >= SAMPLE_INTERVAL_MS) {
+        snapshots.push(snap)
+        lastTimestamp = ts
+      }
+    }
+    if (allSnapshots.length > 0 && snapshots[snapshots.length - 1] !== allSnapshots[allSnapshots.length - 1]) {
+      snapshots.push(allSnapshots[allSnapshots.length - 1])
+    }
 
     res.json({ snapshots, count: snapshots.length, date: targetDate, accountId: accountId || 'default' })
   } catch (error) {
