@@ -1148,6 +1148,7 @@ function renderDashboard() {
   document.getElementById('error').style.display = 'none';
 
   renderDailyCards();
+  renderDailyBalanceCharts();
   updateStats();
   renderPositionsTable();
   renderPositionAllocationChart();
@@ -1157,6 +1158,111 @@ function renderDashboard() {
   renderRealizedPnlChart();
   renderDrawdownChart();
   renderRiskChart();
+}
+
+function renderDailyBalanceCharts() {
+  if (filteredSnapshots.length === 0) return;
+
+  const timestamps = filteredSnapshots.map(s => new Date(s.timestamp));
+  const userBalances = filteredSnapshots.map(s => s.user?.accountValue || 0);
+  const trackedBalances = filteredSnapshots.map(s => s.tracked?.accountValue || 0);
+
+  const userMin = Math.min(...userBalances);
+  const userMax = Math.max(...userBalances);
+  const userPadding = (userMax - userMin) * 0.1 || 100;
+
+  if (chartInstances['balance-history-chart']) chartInstances['balance-history-chart'].destroy();
+  chartInstances['balance-history-chart'] = new Chart(document.getElementById('balance-history-chart').getContext('2d'), {
+    type: 'line',
+    data: {
+      labels: timestamps,
+      datasets: [{
+        label: 'Balance',
+        data: userBalances,
+        borderColor: '#00d4ff',
+        backgroundColor: 'rgba(0, 212, 255, 0.15)',
+        fill: true,
+        borderWidth: 2,
+        tension: 0.1,
+        pointRadius: 0
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#192734',
+          callbacks: { label: ctx => `$${ctx.parsed.y.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` }
+        }
+      },
+      scales: {
+        x: {
+          type: 'time',
+          time: { unit: 'hour', displayFormats: { hour: 'HH:mm' } },
+          ticks: { color: '#8899a6', maxTicksLimit: 12 },
+          grid: { color: '#38444d' }
+        },
+        y: {
+          min: userMin - userPadding,
+          max: userMax + userPadding,
+          ticks: { color: '#8899a6', callback: v => '$' + v.toLocaleString() },
+          grid: { color: '#38444d' }
+        }
+      }
+    }
+  });
+
+  const trackedMin = Math.min(...trackedBalances);
+  const trackedMax = Math.max(...trackedBalances);
+  const trackedPadding = (trackedMax - trackedMin) * 0.1 || 100;
+
+  const trackedCanvas = document.getElementById('tracked-balance-history-chart');
+  if (!trackedCanvas) return;
+
+  if (chartInstances['tracked-balance-history-chart']) chartInstances['tracked-balance-history-chart'].destroy();
+  chartInstances['tracked-balance-history-chart'] = new Chart(trackedCanvas.getContext('2d'), {
+    type: 'line',
+    data: {
+      labels: timestamps,
+      datasets: [{
+        label: 'Balance',
+        data: trackedBalances,
+        borderColor: '#f7931a',
+        backgroundColor: 'rgba(247, 147, 26, 0.15)',
+        fill: true,
+        borderWidth: 2,
+        tension: 0.1,
+        pointRadius: 0
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#192734',
+          callbacks: { label: ctx => `$${ctx.parsed.y.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` }
+        }
+      },
+      scales: {
+        x: {
+          type: 'time',
+          time: { unit: 'hour', displayFormats: { hour: 'HH:mm' } },
+          ticks: { color: '#8899a6', maxTicksLimit: 12 },
+          grid: { color: '#38444d' }
+        },
+        y: {
+          min: trackedMin - trackedPadding,
+          max: trackedMax + trackedPadding,
+          ticks: { color: '#8899a6', callback: v => '$' + v.toLocaleString() },
+          grid: { color: '#38444d' }
+        }
+      }
+    }
+  });
 }
 
 function updateStats() {
