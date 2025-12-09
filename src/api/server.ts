@@ -28,11 +28,7 @@ const FRONTEND_DIR = path.join(__dirname, '../../frontend')
 
 let accountContexts: Map<string, AccountContext> = new Map()
 
-interface DayCache {
-  user: Array<{ timestamp: number; balance: number }>
-  tracked: Array<{ timestamp: number; balance: number }>
-}
-const balanceHistoryCache: Map<string, DayCache> = new Map()
+const SAMPLE_INTERVAL_MS = 5 * 60 * 1000
 
 app.use(express.static(FRONTEND_DIR))
 
@@ -273,7 +269,6 @@ app.get('/api/balance-history', (req: Request, res: Response) => {
     const balanceHistory: Array<{ timestamp: number; balance: number }> = []
     const trackedHistory: Array<{ timestamp: number; balance: number }> = []
     const today = new Date()
-    const todayStr = today.toISOString().split('T')[0]
 
     const dataDir = accountId ? path.join(DATA_DIR, accountId) : DATA_DIR
 
@@ -281,34 +276,20 @@ app.get('/api/balance-history', (req: Request, res: Response) => {
       const date = new Date(today)
       date.setDate(date.getDate() - i)
       const dateStr = date.toISOString().split('T')[0]
-      const isToday = dateStr === todayStr
-      const cacheKey = `${accountId || 'default'}:${dateStr}`
-
-      if (!isToday && balanceHistoryCache.has(cacheKey)) {
-        const cached = balanceHistoryCache.get(cacheKey)!
-        balanceHistory.push(...cached.user)
-        trackedHistory.push(...cached.tracked)
-        continue
-      }
 
       const filePath = path.join(dataDir, `snapshots-${dateStr}.jsonl`)
       if (fs.existsSync(filePath)) {
         const content = fs.readFileSync(filePath, 'utf-8')
         const lines = content.trim().split('\n').filter(line => line)
-        const dayUser: Array<{ timestamp: number; balance: number }> = []
-        const dayTracked: Array<{ timestamp: number; balance: number }> = []
 
+        let lastSampledTime = 0
         for (const line of lines) {
           const snapshot = JSON.parse(line)
-          dayUser.push({ timestamp: snapshot.timestamp, balance: snapshot.user?.accountValue || 0 })
-          dayTracked.push({ timestamp: snapshot.timestamp, balance: snapshot.tracked?.accountValue || 0 })
-        }
-
-        balanceHistory.push(...dayUser)
-        trackedHistory.push(...dayTracked)
-
-        if (!isToday) {
-          balanceHistoryCache.set(cacheKey, { user: dayUser, tracked: dayTracked })
+          if (snapshot.timestamp - lastSampledTime >= SAMPLE_INTERVAL_MS) {
+            balanceHistory.push({ timestamp: snapshot.timestamp, balance: snapshot.user?.accountValue || 0 })
+            trackedHistory.push({ timestamp: snapshot.timestamp, balance: snapshot.tracked?.accountValue || 0 })
+            lastSampledTime = snapshot.timestamp
+          }
         }
       }
     }
@@ -326,7 +307,6 @@ app.get('/api/balance-history/all', (req: Request, res: Response) => {
     const daysParam = req.query.days as string
     const numDays = daysParam ? parseInt(daysParam) : 10
     const today = new Date()
-    const todayStr = today.toISOString().split('T')[0]
 
     const result: Record<string, Array<{ timestamp: number; balance: number }>> = {}
 
@@ -342,31 +322,19 @@ app.get('/api/balance-history/all', (req: Request, res: Response) => {
         const date = new Date(today)
         date.setDate(date.getDate() - i)
         const dateStr = date.toISOString().split('T')[0]
-        const isToday = dateStr === todayStr
-        const cacheKey = `${accountId}:${dateStr}`
-
-        if (!isToday && balanceHistoryCache.has(cacheKey)) {
-          balanceHistory.push(...balanceHistoryCache.get(cacheKey)!.user)
-          continue
-        }
 
         const filePath = path.join(dataDir, `snapshots-${dateStr}.jsonl`)
         if (fs.existsSync(filePath)) {
           const content = fs.readFileSync(filePath, 'utf-8')
           const lines = content.trim().split('\n').filter(line => line)
-          const dayUser: Array<{ timestamp: number; balance: number }> = []
-          const dayTracked: Array<{ timestamp: number; balance: number }> = []
 
+          let lastSampledTime = 0
           for (const line of lines) {
             const snapshot = JSON.parse(line)
-            dayUser.push({ timestamp: snapshot.timestamp, balance: snapshot.user?.accountValue || 0 })
-            dayTracked.push({ timestamp: snapshot.timestamp, balance: snapshot.tracked?.accountValue || 0 })
-          }
-
-          balanceHistory.push(...dayUser)
-
-          if (!isToday) {
-            balanceHistoryCache.set(cacheKey, { user: dayUser, tracked: dayTracked })
+            if (snapshot.timestamp - lastSampledTime >= SAMPLE_INTERVAL_MS) {
+              balanceHistory.push({ timestamp: snapshot.timestamp, balance: snapshot.user?.accountValue || 0 })
+              lastSampledTime = snapshot.timestamp
+            }
           }
         }
       }

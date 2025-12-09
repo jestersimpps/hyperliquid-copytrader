@@ -21,84 +21,11 @@ let summaryPingIntervals = [];
 let soundEnabled = false;
 let fillSound = null;
 
-const CACHE_PREFIX = 'hs_cache_';
-const CACHE_VERSION = 1;
-
-function getCacheKey(type, accountId, date) {
-  return `${CACHE_PREFIX}${type}_${accountId || 'default'}_${date}_v${CACHE_VERSION}`;
-}
-
-function getFromCache(type, accountId, date) {
-  try {
-    const key = getCacheKey(type, accountId, date);
-    const cached = localStorage.getItem(key);
-    return cached ? JSON.parse(cached) : null;
-  } catch (e) { return null; }
-}
-
-function saveToCache(type, accountId, date, data) {
-  try {
-    const key = getCacheKey(type, accountId, date);
-    localStorage.setItem(key, JSON.stringify(data));
-  } catch (e) { }
-}
-
-function getTodayStr() {
-  return new Date().toISOString().split('T')[0];
-}
-
-async function fetchBalanceHistoryWithCache(accountId, days = 10) {
-  const today = getTodayStr();
-  const userHistory = [];
-  const trackedHistory = [];
-  const datesToFetch = [];
-
-  for (let i = days - 1; i >= 0; i--) {
-    const d = new Date();
-    d.setDate(d.getDate() - i);
-    const dateStr = d.toISOString().split('T')[0];
-    const isToday = dateStr === today;
-
-    if (!isToday) {
-      const cached = getFromCache('balance', accountId, dateStr);
-      if (cached) {
-        userHistory.push(...cached.user);
-        trackedHistory.push(...cached.tracked);
-        continue;
-      }
-    }
-    datesToFetch.push(dateStr);
-  }
-
-  if (datesToFetch.length > 0) {
-    const accountParam = accountId ? `&account=${accountId}` : '';
-    const res = await fetch(`/api/balance-history?days=${days}${accountParam}`);
-    const data = await res.json();
-
-    const byDate = {};
-    for (const item of data.history || []) {
-      const d = new Date(item.timestamp).toISOString().split('T')[0];
-      if (!byDate[d]) byDate[d] = { user: [], tracked: [] };
-      byDate[d].user.push(item);
-    }
-    for (const item of data.trackedHistory || []) {
-      const d = new Date(item.timestamp).toISOString().split('T')[0];
-      if (!byDate[d]) byDate[d] = { user: [], tracked: [] };
-      byDate[d].tracked.push(item);
-    }
-
-    for (const dateStr of Object.keys(byDate)) {
-      userHistory.push(...byDate[dateStr].user);
-      trackedHistory.push(...byDate[dateStr].tracked);
-      if (dateStr !== today) {
-        saveToCache('balance', accountId, dateStr, byDate[dateStr]);
-      }
-    }
-  }
-
-  userHistory.sort((a, b) => a.timestamp - b.timestamp);
-  trackedHistory.sort((a, b) => a.timestamp - b.timestamp);
-  return { history: userHistory, trackedHistory };
+async function fetchBalanceHistory(accountId, days = 10) {
+  const accountParam = accountId ? `&account=${accountId}` : '';
+  const res = await fetch(`/api/balance-history?days=${days}${accountParam}`);
+  const data = await res.json();
+  return { history: data.history || [], trackedHistory: data.trackedHistory || [] };
 }
 
 const SYMBOL_COLORS = [
@@ -1228,14 +1155,14 @@ async function fetchSnapshots(date = null) {
     const targetDate = date || selectedDate;
     const accountParam = currentAccountId && currentAccountId !== 'summary' ? `&account=${currentAccountId}` : '';
 
-    const accountIdForCache = currentAccountId && currentAccountId !== 'summary' ? currentAccountId : null;
+    const accountIdForFetch = currentAccountId && currentAccountId !== 'summary' ? currentAccountId : null;
 
     const [snapshotsRes, tradesRes, trackedFillsRes, summaryRes, balanceHistoryDataRes] = await Promise.all([
       fetch(`/api/snapshots?date=${targetDate}${accountParam}`),
       fetch(`/api/trades?date=${targetDate}${accountParam}`),
       fetch(`/api/tracked-fills?date=${targetDate}${accountParam}`),
       fetch(`/api/daily-summary?days=10${accountParam}`),
-      fetchBalanceHistoryWithCache(accountIdForCache, 10)
+      fetchBalanceHistory(accountIdForFetch, 10)
     ]);
 
     const snapshotsData = await snapshotsRes.json();
