@@ -90,18 +90,30 @@ function slimSnapshot(snapshot: Record<string, unknown>): Record<string, unknown
   if (snapshot.user && typeof snapshot.user === 'object') {
     const user = snapshot.user as Record<string, unknown>
     const positions = (user.positions as Array<Record<string, unknown>>) || []
+    const totalMarginUsed = positions.reduce((sum: number, p) => sum + ((p.marginUsed as number) || 0), 0)
+    const avgLeverage = positions.length > 0
+      ? positions.reduce((sum: number, p) => sum + ((p.leverage as number) || 0), 0) / positions.length
+      : 0
     result.user = {
       accountValue: user.accountValue,
-      positions: positions.map(slimPosition)
+      positions: positions.map(slimPosition),
+      averageLeverage: avgLeverage,
+      crossMarginRatio: (user.accountValue as number) > 0 ? (totalMarginUsed / (user.accountValue as number)) * 100 : 0
     }
   }
 
   if (snapshot.tracked && typeof snapshot.tracked === 'object') {
     const tracked = snapshot.tracked as Record<string, unknown>
     const positions = (tracked.positions as Array<Record<string, unknown>>) || []
+    const totalMarginUsed = positions.reduce((sum: number, p) => sum + ((p.marginUsed as number) || 0), 0)
+    const avgLeverage = positions.length > 0
+      ? positions.reduce((sum: number, p) => sum + ((p.leverage as number) || 0), 0) / positions.length
+      : 0
     result.tracked = {
       accountValue: tracked.accountValue,
-      positions: positions.map(slimPosition)
+      positions: positions.map(slimPosition),
+      averageLeverage: avgLeverage,
+      crossMarginRatio: (tracked.accountValue as number) > 0 ? (totalMarginUsed / (tracked.accountValue as number)) * 100 : 0
     }
   }
 
