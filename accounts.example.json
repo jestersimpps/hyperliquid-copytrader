@@ -1,5 +1,4 @@
 {
-    "privateKey": "0x...",
     "isTestnet": false,
 
     "globalMinOrderValue": 11,
@@ -17,6 +16,7 @@
         {
             "id": "A",
             "name": "Trader 1",
+            "privateKey": "0x...",
             "trackedWallet": "0x...",
             "userWallet": "0x...",
             "vaultAddress": "0x...",
@@ -25,6 +25,7 @@
         {
             "id": "B",
             "name": "Trader 2",
+            "privateKey": "0x...",
             "trackedWallet": "0x...",
             "userWallet": "0x...",
             "vaultAddress": "0x...",

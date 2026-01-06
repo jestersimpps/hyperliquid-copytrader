@@ -93,9 +93,9 @@ export class SyncService {
       console.log(`   [${this.accountId}] 📈 Opening ${side.toUpperCase()} ${coin}: ${size.toFixed(4)} @ $${markPrice.toFixed(2)}`)
 
       if (side === 'long') {
-        await this.hyperliquidService.openLong(coin, size, markPrice, vaultAddress, this.minOrderValue)
+        await this.hyperliquidService.openLong(this.accountId, coin, size, markPrice, vaultAddress, this.minOrderValue)
       } else {
-        await this.hyperliquidService.openShort(coin, size, markPrice, vaultAddress, this.minOrderValue)
+        await this.hyperliquidService.openShort(this.accountId, coin, size, markPrice, vaultAddress, this.minOrderValue)
       }
 
       this.loggerService.logTrade({
@@ -115,7 +115,7 @@ export class SyncService {
       const { coin, markPrice } = drift.userPosition
 
       console.log(`   [${this.accountId}] 📉 Closing orphan ${coin} @ $${markPrice.toFixed(2)}`)
-      await this.hyperliquidService.closePosition(coin, markPrice, userWallet, undefined, vaultAddress, this.minOrderValue)
+      await this.hyperliquidService.closePosition(this.accountId, coin, markPrice, userWallet, undefined, vaultAddress, this.minOrderValue)
 
       this.loggerService.logTrade({
         coin,
@@ -138,7 +138,7 @@ export class SyncService {
 
       if (currentSize < targetSize) {
         console.log(`   [${this.accountId}] 📈 Adding to ${side.toUpperCase()} ${coin}: +${sizeDiff.toFixed(4)} @ $${markPrice.toFixed(2)}`)
-        await this.hyperliquidService.addToPosition(coin, sizeDiff, markPrice, side, vaultAddress, this.minOrderValue)
+        await this.hyperliquidService.addToPosition(this.accountId, coin, sizeDiff, markPrice, side, vaultAddress, this.minOrderValue)
 
         this.loggerService.logTrade({
           coin,
@@ -153,7 +153,7 @@ export class SyncService {
         })
       } else {
         console.log(`   [${this.accountId}] 📉 Reducing ${side.toUpperCase()} ${coin}: -${sizeDiff.toFixed(4)} @ $${markPrice.toFixed(2)}`)
-        await this.hyperliquidService.reducePosition(coin, sizeDiff, markPrice, userWallet, vaultAddress, this.minOrderValue)
+        await this.hyperliquidService.reducePosition(this.accountId, coin, sizeDiff, markPrice, userWallet, vaultAddress, this.minOrderValue)
 
         this.loggerService.logTrade({
           coin,
@@ -175,12 +175,12 @@ export class SyncService {
 
       console.log(`   [${this.accountId}] 🔄 Reversing ${coin} from ${drift.userPosition.side.toUpperCase()} to ${side.toUpperCase()}: ${targetSize.toFixed(4)} @ $${markPrice.toFixed(2)}`)
 
-      await this.hyperliquidService.closePosition(coin, markPrice, userWallet, undefined, vaultAddress, this.minOrderValue)
+      await this.hyperliquidService.closePosition(this.accountId, coin, markPrice, userWallet, undefined, vaultAddress, this.minOrderValue)
 
       if (side === 'long') {
-        await this.hyperliquidService.openLong(coin, targetSize, markPrice, vaultAddress, this.minOrderValue)
+        await this.hyperliquidService.openLong(this.accountId, coin, targetSize, markPrice, vaultAddress, this.minOrderValue)
       } else {
-        await this.hyperliquidService.openShort(coin, targetSize, markPrice, vaultAddress, this.minOrderValue)
+        await this.hyperliquidService.openShort(this.accountId, coin, targetSize, markPrice, vaultAddress, this.minOrderValue)
       }
 
       this.loggerService.logTrade({

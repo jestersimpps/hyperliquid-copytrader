@@ -18,7 +18,9 @@ interface CoinMeta {
 
 export class HyperliquidService {
   private publicClient: PublicClient
-  private walletClient: WalletClient | null = null
+  private walletClients: Map<string, WalletClient> = new Map()
+  private httpTransport: HttpTransport
+  private isTestnet: boolean
   private metaCache: Map<string, CoinMeta> = new Map()
   private tickSizeCache: Map<string, number> = new Map()
   private readonly TICK_SIZE_CACHE_FILE = path.resolve(process.cwd(), 'data', 'tick-sizes.json')
@@ -33,23 +35,33 @@ export class HyperliquidService {
       ? 'https://api.hyperliquid-testnet.xyz'
       : 'https://api.hyperliquid.xyz'
 
-    const httpTransport = new HttpTransport({
+    this.httpTransport = new HttpTransport({
       url: httpUrl,
       timeout: 30000,
       fetchOptions: { keepalive: false }
     })
+    this.isTestnet = config.isTestnet
 
-    this.publicClient = new PublicClient({ transport: httpTransport })
+    this.publicClient = new PublicClient({ transport: this.httpTransport })
     this.globalMinOrderValue = config.globalMinOrderValue
+  }
 
-    if (config.privateKey) {
-      const account = privateKeyToAccount(config.privateKey as `0x${string}`)
-      this.walletClient = new WalletClient({
-        wallet: account,
-        transport: httpTransport,
-        isTestnet: config.isTestnet
-      })
+  initializeWalletClient(accountId: string, privateKey: string): void {
+    const account = privateKeyToAccount(privateKey as `0x${string}`)
+    const walletClient = new WalletClient({
+      wallet: account,
+      transport: this.httpTransport,
+      isTestnet: this.isTestnet
+    })
+    this.walletClients.set(accountId, walletClient)
+  }
+
+  private getWalletClient(accountId: string): WalletClient {
+    const client = this.walletClients.get(accountId)
+    if (!client) {
+      throw new Error(`Wallet client not initialized for account ${accountId}`)
     }
+    return client
   }
 
   async initialize(): Promise<void> {
@@ -279,6 +291,7 @@ export class HyperliquidService {
   }
 
   private async placeMarketBuy(
+    accountId: string,
     coin: string,
     size: number,
     fillPrice: number,
@@ -286,7 +299,7 @@ export class HyperliquidService {
     vaultAddress?: string,
     minOrderValue?: number
   ): Promise<OrderResponse> {
-    if (!this.walletClient) throw new Error('Wallet client not initialized')
+    const walletClient = this.getWalletClient(accountId)
 
     const coinIndex = this.getCoinIndex(coin)
     const validated = this.validateOrderSize(size, coin, fillPrice, minOrderValue)
@@ -297,7 +310,7 @@ export class HyperliquidService {
       const priceString = await this.formatPrice(orderPrice, coin)
 
       try {
-        const orderParams: Parameters<typeof this.walletClient.order>[0] = {
+        const orderParams: Parameters<typeof walletClient.order>[0] = {
           orders: [{
             a: coinIndex,
             b: true,
@@ -313,7 +326,7 @@ export class HyperliquidService {
           orderParams.vaultAddress = vaultAddress as `0x${string}`
         }
 
-        const response = await this.walletClient.order(orderParams)
+        const response = await walletClient.order(orderParams)
 
         const status = response.response.data.statuses[0]
         if (status && 'error' in status) {
@@ -329,7 +342,7 @@ export class HyperliquidService {
         if (attempt === this.MAX_RETRIES) {
           const maxPrice = fillPrice * (1 + this.MAX_SLIPPAGE_PERCENT / 100)
           const maxPriceString = await this.formatPrice(maxPrice, coin)
-          const fallbackParams: Parameters<typeof this.walletClient.order>[0] = {
+          const fallbackParams: Parameters<typeof walletClient.order>[0] = {
             orders: [{
               a: coinIndex,
               b: true,
@@ -343,7 +356,7 @@ export class HyperliquidService {
           if (vaultAddress) {
             fallbackParams.vaultAddress = vaultAddress as `0x${string}`
           }
-          return await this.walletClient.order(fallbackParams)
+          return await walletClient.order(fallbackParams)
         }
         throw error
       }
@@ -353,6 +366,7 @@ export class HyperliquidService {
   }
 
   private async placeMarketSell(
+    accountId: string,
     coin: string,
     size: number,
     fillPrice: number,
@@ -360,7 +374,7 @@ export class HyperliquidService {
     vaultAddress?: string,
     minOrderValue?: number
   ): Promise<OrderResponse> {
-    if (!this.walletClient) throw new Error('Wallet client not initialized')
+    const walletClient = this.getWalletClient(accountId)
 
     const coinIndex = this.getCoinIndex(coin)
     const validated = this.validateOrderSize(size, coin, fillPrice, minOrderValue)
@@ -371,7 +385,7 @@ export class HyperliquidService {
       const priceString = await this.formatPrice(orderPrice, coin)
 
       try {
-        const orderParams: Parameters<typeof this.walletClient.order>[0] = {
+        const orderParams: Parameters<typeof walletClient.order>[0] = {
           orders: [{
             a: coinIndex,
             b: false,
@@ -387,7 +401,7 @@ export class HyperliquidService {
           orderParams.vaultAddress = vaultAddress as `0x${string}`
         }
 
-        const response = await this.walletClient.order(orderParams)
+        const response = await walletClient.order(orderParams)
 
         const status = response.response.data.statuses[0]
         if (status && 'error' in status) {
@@ -403,7 +417,7 @@ export class HyperliquidService {
         if (attempt === this.MAX_RETRIES) {
           const maxPrice = fillPrice * (1 - this.MAX_SLIPPAGE_PERCENT / 100)
           const maxPriceString = await this.formatPrice(maxPrice, coin)
-          const fallbackParams: Parameters<typeof this.walletClient.order>[0] = {
+          const fallbackParams: Parameters<typeof walletClient.order>[0] = {
             orders: [{
               a: coinIndex,
               b: false,
@@ -417,7 +431,7 @@ export class HyperliquidService {
           if (vaultAddress) {
             fallbackParams.vaultAddress = vaultAddress as `0x${string}`
           }
-          return await this.walletClient.order(fallbackParams)
+          return await walletClient.order(fallbackParams)
         }
         throw error
       }
@@ -426,16 +440,15 @@ export class HyperliquidService {
     throw new Error(`Order failed after ${this.MAX_RETRIES} attempts`)
   }
 
-  async openLong(coin: string, size: number, price: number, vaultAddress?: string, minOrderValue?: number): Promise<OrderResponse> {
-    return await this.placeMarketBuy(coin, size, price, false, vaultAddress, minOrderValue)
+  async openLong(accountId: string, coin: string, size: number, price: number, vaultAddress?: string, minOrderValue?: number): Promise<OrderResponse> {
+    return await this.placeMarketBuy(accountId, coin, size, price, false, vaultAddress, minOrderValue)
   }
 
-  async openShort(coin: string, size: number, price: number, vaultAddress?: string, minOrderValue?: number): Promise<OrderResponse> {
-    return await this.placeMarketSell(coin, size, price, false, vaultAddress, minOrderValue)
+  async openShort(accountId: string, coin: string, size: number, price: number, vaultAddress?: string, minOrderValue?: number): Promise<OrderResponse> {
+    return await this.placeMarketSell(accountId, coin, size, price, false, vaultAddress, minOrderValue)
   }
 
-  async closePosition(coin: string, price: number, userWallet: string, size?: number, vaultAddress?: string, minOrderValue?: number): Promise<OrderResponse> {
-    if (!this.walletClient) throw new Error('Wallet client not initialized')
+  async closePosition(accountId: string, coin: string, price: number, userWallet: string, size?: number, vaultAddress?: string, minOrderValue?: number): Promise<OrderResponse> {
 
     const positionWallet = vaultAddress || userWallet
     const positions = await this.getOpenPositions(positionWallet)
@@ -445,25 +458,25 @@ export class HyperliquidService {
     const closeSize = size ? Math.min(size, position.size) : position.size
 
     if (position.side === 'long') {
-      return await this.placeMarketSell(coin, closeSize, price, true, vaultAddress, minOrderValue)
+      return await this.placeMarketSell(accountId, coin, closeSize, price, true, vaultAddress, minOrderValue)
     } else {
-      return await this.placeMarketBuy(coin, closeSize, price, true, vaultAddress, minOrderValue)
+      return await this.placeMarketBuy(accountId, coin, closeSize, price, true, vaultAddress, minOrderValue)
     }
   }
 
-  async reducePosition(coin: string, reduceSize: number, price: number, userWallet: string, vaultAddress?: string, minOrderValue?: number): Promise<OrderResponse> {
-    return await this.closePosition(coin, price, userWallet, reduceSize, vaultAddress, minOrderValue)
+  async reducePosition(accountId: string, coin: string, reduceSize: number, price: number, userWallet: string, vaultAddress?: string, minOrderValue?: number): Promise<OrderResponse> {
+    return await this.closePosition(accountId, coin, price, userWallet, reduceSize, vaultAddress, minOrderValue)
   }
 
-  async addToPosition(coin: string, size: number, price: number, side: 'long' | 'short', vaultAddress?: string, minOrderValue?: number): Promise<OrderResponse> {
+  async addToPosition(accountId: string, coin: string, size: number, price: number, side: 'long' | 'short', vaultAddress?: string, minOrderValue?: number): Promise<OrderResponse> {
     if (side === 'long') {
-      return await this.placeMarketBuy(coin, size, price, false, vaultAddress, minOrderValue)
+      return await this.placeMarketBuy(accountId, coin, size, price, false, vaultAddress, minOrderValue)
     } else {
-      return await this.placeMarketSell(coin, size, price, false, vaultAddress, minOrderValue)
+      return await this.placeMarketSell(accountId, coin, size, price, false, vaultAddress, minOrderValue)
     }
   }
 
-  canExecuteTrades(): boolean {
-    return this.walletClient !== null
+  canExecuteTrades(accountId: string): boolean {
+    return this.walletClients.has(accountId)
   }
 }

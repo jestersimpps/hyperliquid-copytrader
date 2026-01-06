@@ -582,9 +582,9 @@ export class TelegramService {
       const vaultAddress = data.config.vaultAddress || undefined
 
       if (percent === 100) {
-        await this.hyperliquidService.closePosition(coin, position.markPrice, userWallet, undefined, vaultAddress)
+        await this.hyperliquidService.closePosition(accountId, coin, position.markPrice, userWallet, undefined, vaultAddress)
       } else {
-        await this.hyperliquidService.reducePosition(coin, closeSize, position.markPrice, userWallet, vaultAddress)
+        await this.hyperliquidService.reducePosition(accountId, coin, closeSize, position.markPrice, userWallet, vaultAddress)
       }
 
       const executionMs = Date.now() - startTime
@@ -629,7 +629,7 @@ export class TelegramService {
       const { userWallet } = data.config
       const vaultAddress = data.config.vaultAddress || undefined
 
-      await this.hyperliquidService.closePosition(coin, position.markPrice, userWallet, undefined, vaultAddress)
+      await this.hyperliquidService.closePosition(accountId, coin, position.markPrice, userWallet, undefined, vaultAddress)
 
       data.loggerService.logTrade({
         coin,
@@ -686,7 +686,7 @@ export class TelegramService {
 
     for (const position of positions) {
       try {
-        await this.hyperliquidService.closePosition(position.coin, position.markPrice, userWallet, undefined, vaultAddress)
+        await this.hyperliquidService.closePosition(accountId, position.coin, position.markPrice, userWallet, undefined, vaultAddress)
         data.loggerService.logTrade({
           coin: position.coin,
           action: 'close',
@@ -801,7 +801,7 @@ export class TelegramService {
       const { userWallet } = data.config
       const vaultAddress = data.config.vaultAddress || undefined
 
-      await this.hyperliquidService.closePosition(coin, position.markPrice, userWallet, undefined, vaultAddress)
+      await this.hyperliquidService.closePosition(accountId, coin, position.markPrice, userWallet, undefined, vaultAddress)
 
       data.loggerService.logTrade({
         coin,
@@ -848,7 +848,7 @@ export class TelegramService {
 
     for (const position of positions) {
       try {
-        await this.hyperliquidService.closePosition(position.coin, position.markPrice, userWallet, undefined, vaultAddress)
+        await this.hyperliquidService.closePosition(accountId, position.coin, position.markPrice, userWallet, undefined, vaultAddress)
         data.loggerService.logTrade({
           coin: position.coin,
           action: 'close',

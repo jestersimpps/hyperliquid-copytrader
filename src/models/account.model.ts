@@ -1,6 +1,7 @@
 export interface SubAccountConfig {
   id: string
   name: string
+  privateKey: string
   trackedWallet: string
   userWallet: string
   vaultAddress: string
@@ -16,7 +17,6 @@ export interface TelegramConfig {
 }
 
 export interface MultiAccountConfig {
-  privateKey: string
   isTestnet: boolean
   accounts: SubAccountConfig[]
   telegram: TelegramConfig | null

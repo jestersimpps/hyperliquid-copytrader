@@ -13,11 +13,6 @@ export function loadMultiAccountConfig(): MultiAccountConfig {
   const raw = fs.readFileSync(CONFIG_PATH, 'utf-8')
   const config = JSON.parse(raw) as MultiAccountConfig
 
-  if (!config.privateKey) {
-    console.error('privateKey is required in accounts.json')
-    process.exit(1)
-  }
-
   if (!config.accounts || config.accounts.length === 0) {
     console.error('At least one account is required in accounts.json')
     process.exit(1)
@@ -28,10 +23,13 @@ export function loadMultiAccountConfig(): MultiAccountConfig {
       console.error(`Account ${account.id || 'unknown'} is missing required fields (id, trackedWallet, userWallet)`)
       process.exit(1)
     }
+    if (!account.privateKey) {
+      console.error(`Account ${account.id} is missing required field: privateKey`)
+      process.exit(1)
+    }
   }
 
   return {
-    privateKey: config.privateKey,
     isTestnet: config.isTestnet ?? false,
     accounts: config.accounts,
     telegram: config.telegram ?? null,

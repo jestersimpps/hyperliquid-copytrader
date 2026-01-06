@@ -46,6 +46,12 @@ async function main(): Promise<void> {
   const hyperliquidService = new HyperliquidService(globalConfig)
   await hyperliquidService.initialize()
 
+  for (const account of enabledAccounts) {
+    hyperliquidService.initializeWalletClient(account.id, account.privateKey)
+    console.log(`   ✓ Wallet client initialized for account ${account.id}`)
+  }
+  console.log('')
+
   const telegramService = new TelegramService(globalConfig.telegram)
   telegramService.setHyperliquidService(hyperliquidService)
 

@@ -155,6 +155,7 @@ export class BalanceMonitorService {
 
         try {
           await this.hyperliquidService.closePosition(
+            this.accountId,
             pos.coin,
             pos.markPrice,
             userWallet,

@@ -91,7 +91,7 @@ export class FillProcessorService {
     console.log(`\n📊 [${this.accountId}][Conn ${connectionId}] ${fill.coin} - ${action.action.toUpperCase()}`)
     console.log(`   ${action.reason}`)
 
-    if (!this.hyperliquidService.canExecuteTrades()) {
+    if (!this.hyperliquidService.canExecuteTrades(this.accountId)) {
       console.log(`   [${this.accountId}] ⚠️ Trading disabled, skipping execution`)
       return
     }
@@ -259,31 +259,31 @@ export class FillProcessorService {
     switch (action.action) {
       case 'open':
         if (action.side === 'long') {
-          await this.hyperliquidService.openLong(action.coin, action.size, price, vaultAddress, this.minOrderValue)
+          await this.hyperliquidService.openLong(this.accountId, action.coin, action.size, price, vaultAddress, this.minOrderValue)
         } else {
-          await this.hyperliquidService.openShort(action.coin, action.size, price, vaultAddress, this.minOrderValue)
+          await this.hyperliquidService.openShort(this.accountId, action.coin, action.size, price, vaultAddress, this.minOrderValue)
         }
         break
 
       case 'close':
-        await this.hyperliquidService.closePosition(action.coin, price, userWallet, undefined, vaultAddress, this.minOrderValue)
+        await this.hyperliquidService.closePosition(this.accountId, action.coin, price, userWallet, undefined, vaultAddress, this.minOrderValue)
         break
 
       case 'reverse':
-        await this.hyperliquidService.closePosition(action.coin, price, userWallet, undefined, vaultAddress, this.minOrderValue)
+        await this.hyperliquidService.closePosition(this.accountId, action.coin, price, userWallet, undefined, vaultAddress, this.minOrderValue)
         if (action.side === 'long') {
-          await this.hyperliquidService.openLong(action.coin, action.size, price, vaultAddress, this.minOrderValue)
+          await this.hyperliquidService.openLong(this.accountId, action.coin, action.size, price, vaultAddress, this.minOrderValue)
         } else {
-          await this.hyperliquidService.openShort(action.coin, action.size, price, vaultAddress, this.minOrderValue)
+          await this.hyperliquidService.openShort(this.accountId, action.coin, action.size, price, vaultAddress, this.minOrderValue)
         }
         break
 
       case 'add':
-        await this.hyperliquidService.addToPosition(action.coin, action.size, price, action.side, vaultAddress, this.minOrderValue)
+        await this.hyperliquidService.addToPosition(this.accountId, action.coin, action.size, price, action.side, vaultAddress, this.minOrderValue)
         break
 
       case 'reduce':
-        await this.hyperliquidService.reducePosition(action.coin, action.size, price, userWallet, vaultAddress, this.minOrderValue)
+        await this.hyperliquidService.reducePosition(this.accountId, action.coin, action.size, price, userWallet, vaultAddress, this.minOrderValue)
         break
     }
   }
