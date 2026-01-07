@@ -1466,76 +1466,182 @@ function renderRiskChart() {
 }
 
 function renderDailyCards() {
-  Object.keys(chartInstances).forEach(key => {
-    if (key.startsWith('daily-chart-')) {
-      chartInstances[key].destroy();
-      delete chartInstances[key];
-    }
-  });
+  const container = document.getElementById('daily-calendar-container');
+  if (!container) return;
 
-  const container = document.getElementById('daily-cards-grid');
-  container.innerHTML = '';
+  const pnlValues = dailySummaryData.filter(d => d.hasData).map(d => Math.abs(d.pnlPercentage));
+  const maxPnl = Math.max(...pnlValues, 1);
 
+  const getIntensityClass = (pnlPct) => {
+    const absPct = Math.abs(pnlPct);
+    const ratio = absPct / maxPnl;
+    let level = 1;
+    if (ratio > 0.8) level = 5;
+    else if (ratio > 0.6) level = 4;
+    else if (ratio > 0.4) level = 3;
+    else if (ratio > 0.2) level = 2;
+    return pnlPct >= 0 ? `profit-${level}` : `loss-${level}`;
+  };
+
+  const daysByDate = {};
   for (const day of dailySummaryData) {
-    const card = document.createElement('div');
-    card.className = day.hasData ? 'daily-card' : 'daily-card no-data';
-    if (day.date === selectedDate) card.classList.add('selected');
+    daysByDate[day.date] = day;
+  }
 
-    const dateLabel = new Date(day.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  const sortedDates = dailySummaryData.map(d => d.date).sort();
+  const firstDate = new Date(sortedDates[0]);
+  const lastDate = new Date(sortedDates[sortedDates.length - 1]);
 
-    if (day.hasData) {
-      const pnlClass = day.totalPnl >= 0 ? 'positive' : 'negative';
-      const pnlSign = day.totalPnl >= 0 ? '+' : '';
-      const chartId = `daily-chart-${day.date}`;
+  const weeks = [];
+  let currentWeek = [];
+  const startOfWeek = new Date(firstDate);
+  startOfWeek.setDate(startOfWeek.getDate() - ((startOfWeek.getDay() + 6) % 7));
 
-      card.innerHTML = `
-        <div class="daily-card-date">${dateLabel}</div>
-        <div class="daily-card-pnl ${pnlClass}">${pnlSign}$${day.totalPnl.toFixed(2)}</div>
-        <div class="daily-card-percent">${pnlSign}${day.pnlPercentage.toFixed(2)}%</div>
-        <div class="daily-card-balance">$${day.endBalance.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</div>
-        <div class="daily-card-chart"><canvas id="${chartId}"></canvas></div>
+  for (let d = new Date(startOfWeek); d <= lastDate; d.setDate(d.getDate() + 1)) {
+    const dateStr = d.toISOString().split('T')[0];
+    const dayOfWeek = (d.getDay() + 6) % 7;
+
+    if (dayOfWeek === 0 && currentWeek.length > 0) {
+      weeks.push(currentWeek);
+      currentWeek = [];
+    }
+
+    currentWeek.push({
+      date: dateStr,
+      dayOfWeek,
+      dayNum: d.getDate(),
+      month: d.toLocaleDateString('en-US', { month: 'short' }),
+      data: daysByDate[dateStr] || null,
+      isInRange: d >= firstDate && d <= lastDate
+    });
+  }
+  if (currentWeek.length > 0) {
+    while (currentWeek.length < 7) {
+      currentWeek.push({ date: null, dayOfWeek: currentWeek.length, dayNum: null, data: null, isInRange: false });
+    }
+    weeks.push(currentWeek);
+  }
+
+  let html = `
+    <div class="daily-calendar">
+      <div class="daily-calendar-header">
+        <span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span>
+      </div>
+      <div class="daily-calendar-grid">
+  `;
+
+  for (const week of weeks) {
+    for (const cell of week) {
+      if (!cell.isInRange || !cell.date) {
+        html += `<div class="daily-cell empty"></div>`;
+        continue;
+      }
+
+      const day = cell.data;
+      const isSelected = cell.date === selectedDate;
+      let cellClass = 'daily-cell';
+      let pctText = '';
+
+      if (day && day.hasData) {
+        cellClass += ` ${getIntensityClass(day.pnlPercentage)}`;
+        const sign = day.pnlPercentage >= 0 ? '+' : '';
+        pctText = `${sign}${day.pnlPercentage.toFixed(1)}%`;
+      } else {
+        cellClass += ' no-data';
+      }
+
+      if (isSelected) cellClass += ' selected';
+
+      html += `
+        <div class="${cellClass}"
+             data-date="${cell.date}"
+             data-pnl="${day?.totalPnl?.toFixed(2) || '0'}"
+             data-pct="${day?.pnlPercentage?.toFixed(2) || '0'}"
+             data-balance="${day?.endBalance?.toFixed(0) || '0'}"
+             data-has-data="${day?.hasData || false}">
+          <span class="daily-cell-day">${cell.dayNum}</span>
+          ${pctText ? `<span class="daily-cell-pct">${pctText}</span>` : ''}
+        </div>
       `;
-      card.addEventListener('click', () => filterByDay(day.date));
-      container.appendChild(card);
-      renderDailyMiniChart(chartId, day.date, pnlClass === 'positive');
-    } else {
-      card.innerHTML = `
-        <div class="daily-card-date">${dateLabel}</div>
-        <div style="text-align: center; color: #657786; font-size: 0.9em; padding: 20px 0;">No Data</div>
-      `;
-      container.appendChild(card);
     }
   }
+
+  html += `
+      </div>
+      <div class="daily-calendar-legend">
+        <span>Loss</span>
+        <div class="daily-legend-gradient">
+          <div class="daily-legend-box" style="background: rgba(224, 36, 94, 0.7);"></div>
+          <div class="daily-legend-box" style="background: rgba(224, 36, 94, 0.35);"></div>
+          <div class="daily-legend-box" style="background: rgba(255, 255, 255, 0.03);"></div>
+          <div class="daily-legend-box" style="background: rgba(23, 191, 99, 0.35);"></div>
+          <div class="daily-legend-box" style="background: rgba(23, 191, 99, 0.7);"></div>
+        </div>
+        <span>Profit</span>
+      </div>
+    </div>
+  `;
+
+  container.innerHTML = html;
+
+  container.querySelectorAll('.daily-cell:not(.empty)').forEach(cell => {
+    cell.addEventListener('click', () => {
+      const date = cell.dataset.date;
+      if (date && cell.dataset.hasData === 'true') {
+        filterByDay(date);
+      }
+    });
+
+    cell.addEventListener('mouseenter', showDailyTooltip);
+    cell.addEventListener('mouseleave', hideDailyTooltip);
+  });
 }
 
-async function renderDailyMiniChart(chartId, date, isPositive) {
-  try {
-    const accountParam = currentAccountId && currentAccountId !== 'summary' ? `&account=${currentAccountId}` : '';
-    const response = await fetch(`/api/snapshots?date=${date}${accountParam}`);
-    const data = await response.json();
+function showDailyTooltip(e) {
+  const cell = e.target.closest('.daily-cell');
+  if (!cell || cell.classList.contains('empty')) return;
 
-    if (!data.snapshots || data.snapshots.length === 0) return;
-
-    const balances = data.snapshots.map(s => s.user.accountValue);
-    const color = isPositive ? '#17bf63' : '#e0245e';
-    const ctx = document.getElementById(chartId);
-    if (!ctx) return;
-
-    if (chartInstances[chartId]) {
-      chartInstances[chartId].destroy();
-    }
-
-    chartInstances[chartId] = new Chart(ctx.getContext('2d'), {
-      type: 'line',
-      data: {
-        labels: data.snapshots.map(s => new Date(s.timestamp)),
-        datasets: [{ data: balances, borderColor: color, backgroundColor: color + '20', borderWidth: 1.5, tension: 0.3, pointRadius: 0, fill: true }]
-      },
-      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { enabled: false } }, scales: { x: { display: false }, y: { display: false } } }
-    });
-  } catch (error) {
-    console.error(`Failed to render mini chart for ${date}:`, error);
+  let tooltip = document.getElementById('daily-tooltip');
+  if (!tooltip) {
+    tooltip = document.createElement('div');
+    tooltip.id = 'daily-tooltip';
+    tooltip.className = 'daily-tooltip';
+    document.body.appendChild(tooltip);
   }
+
+  const date = cell.dataset.date;
+  const hasData = cell.dataset.hasData === 'true';
+  const dateLabel = new Date(date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+
+  if (!hasData) {
+    tooltip.innerHTML = `
+      <div class="daily-tooltip-date">${dateLabel}</div>
+      <div style="color: #657786;">No data</div>
+    `;
+  } else {
+    const pnl = parseFloat(cell.dataset.pnl);
+    const pct = parseFloat(cell.dataset.pct);
+    const balance = parseFloat(cell.dataset.balance);
+    const pnlClass = pnl >= 0 ? 'positive' : 'negative';
+    const sign = pnl >= 0 ? '+' : '';
+
+    tooltip.innerHTML = `
+      <div class="daily-tooltip-date">${dateLabel}</div>
+      <div class="daily-tooltip-pnl ${pnlClass}">${sign}$${Math.abs(pnl).toFixed(2)}</div>
+      <div class="daily-tooltip-details">${sign}${pct.toFixed(2)}%</div>
+      <div class="daily-tooltip-details">Balance: $${balance.toLocaleString()}</div>
+    `;
+  }
+
+  tooltip.style.display = 'block';
+  const rect = cell.getBoundingClientRect();
+  tooltip.style.left = rect.left + rect.width / 2 - tooltip.offsetWidth / 2 + 'px';
+  tooltip.style.top = rect.top - tooltip.offsetHeight - 8 + 'px';
+}
+
+function hideDailyTooltip() {
+  const tooltip = document.getElementById('daily-tooltip');
+  if (tooltip) tooltip.style.display = 'none';
 }
 
 function renderPositionsTable() {
