@@ -5,3 +5,4 @@ accounts.json
 data/
 logs/
 .claude/
+log-analysis/

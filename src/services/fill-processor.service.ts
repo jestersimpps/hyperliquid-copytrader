@@ -210,7 +210,7 @@ export class FillProcessorService {
         action: 'close',
         coin: fill.coin,
         side: prevSide,
-        size: elevatedSize,
+        size: baseSize,
         reason: `Close ${prevSide.toUpperCase()} @ $${price.toFixed(2)}`
       }
     }
@@ -240,7 +240,7 @@ export class FillProcessorService {
         action: 'reduce',
         coin: fill.coin,
         side: prevSide,
-        size: elevatedSize,
+        size: scaledTradeSize,
         reason: `Reduce ${prevSide.toUpperCase()} @ $${price.toFixed(2)}`
       }
     }
