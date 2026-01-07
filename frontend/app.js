@@ -1158,6 +1158,7 @@ function renderDashboard() {
   document.getElementById('error').style.display = 'none';
 
   renderDailyCards();
+  render30DaySummary();
   renderDailyBalanceCharts();
   updateStats();
   renderPositionsTable();
@@ -1705,6 +1706,61 @@ function showDailyTooltip(e) {
 function hideDailyTooltip() {
   const tooltip = document.getElementById('daily-tooltip');
   if (tooltip) tooltip.style.display = 'none';
+}
+
+function render30DaySummary() {
+  const daysWithData = dailySummaryData.filter(d => d.hasData);
+  if (daysWithData.length === 0) return;
+
+  const sorted = [...daysWithData].sort((a, b) => a.date.localeCompare(b.date));
+  const startBalance = sorted[0].startBalance;
+  const endBalance = sorted[sorted.length - 1].endBalance;
+  const totalReturn = startBalance > 0 ? ((endBalance - startBalance) / startBalance) * 100 : 0;
+
+  const totalPnl = daysWithData.reduce((sum, d) => sum + d.totalPnl, 0);
+  const avgDailyPnl = totalPnl / daysWithData.length;
+  const winDays = daysWithData.filter(d => d.totalPnl > 0).length;
+  const winRate = (winDays / daysWithData.length) * 100;
+
+  const bestDay = Math.max(...daysWithData.map(d => d.pnlPercentage));
+  const worstDay = Math.min(...daysWithData.map(d => d.pnlPercentage));
+
+  const returnEl = document.getElementById('thirty-day-return');
+  const pnlEl = document.getElementById('thirty-day-pnl');
+  const winrateEl = document.getElementById('thirty-day-winrate');
+  const bestEl = document.getElementById('thirty-day-best');
+  const worstEl = document.getElementById('thirty-day-worst');
+  const avgEl = document.getElementById('thirty-day-avg');
+
+  if (returnEl) {
+    const sign = totalReturn >= 0 ? '+' : '';
+    returnEl.textContent = `${sign}${totalReturn.toFixed(1)}%`;
+    returnEl.className = `thirty-day-value ${totalReturn >= 0 ? 'positive' : 'negative'}`;
+  }
+
+  if (pnlEl) {
+    const sign = totalPnl >= 0 ? '+' : '';
+    pnlEl.textContent = `${sign}$${Math.abs(totalPnl).toFixed(0)}`;
+    pnlEl.className = `thirty-day-value ${totalPnl >= 0 ? 'positive' : 'negative'}`;
+  }
+
+  if (winrateEl) {
+    winrateEl.textContent = `${winRate.toFixed(0)}%`;
+  }
+
+  if (bestEl) {
+    bestEl.textContent = `+${bestDay.toFixed(1)}%`;
+  }
+
+  if (worstEl) {
+    worstEl.textContent = `${worstDay.toFixed(1)}%`;
+  }
+
+  if (avgEl) {
+    const sign = avgDailyPnl >= 0 ? '+' : '';
+    avgEl.textContent = `${sign}$${Math.abs(avgDailyPnl).toFixed(0)}`;
+    avgEl.className = `thirty-day-value ${avgDailyPnl >= 0 ? 'positive' : 'negative'}`;
+  }
 }
 
 function renderPositionsTable() {

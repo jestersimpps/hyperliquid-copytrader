@@ -802,6 +802,65 @@ h1 {
   .stat-item { flex: 1 1 45%; }
 }
 
+.thirty-day-summary {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 15px 20px;
+  margin-bottom: 20px;
+}
+
+.thirty-day-title {
+  font-size: 0.8em;
+  color: #657786;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 12px;
+}
+
+.thirty-day-metrics {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 15px;
+}
+
+.thirty-day-metric {
+  text-align: center;
+}
+
+.thirty-day-value {
+  font-size: 1.3em;
+  font-weight: 700;
+  color: #e1e8ed;
+  margin-bottom: 4px;
+}
+
+.thirty-day-value.positive { color: #17bf63; }
+.thirty-day-value.negative { color: #e0245e; }
+
+.thirty-day-label {
+  font-size: 0.7em;
+  color: #657786;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+@media (max-width: 900px) {
+  .thirty-day-metrics {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .thirty-day-metrics {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .thirty-day-value {
+    font-size: 1.1em;
+  }
+}
+
 .positions-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
