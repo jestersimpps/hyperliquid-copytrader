@@ -1044,6 +1044,16 @@ function renderCombinedBalanceChart() {
 
   if (aggregatedData.length === 0) return;
 
+  const startBalance = aggregatedData[0].y;
+  const endBalance = aggregatedData[aggregatedData.length - 1].y;
+  const pnl30d = startBalance > 0 ? ((endBalance - startBalance) / startBalance) * 100 : 0;
+  const pnl30dEl = document.getElementById('pnl-30d');
+  if (pnl30dEl) {
+    const sign = pnl30d >= 0 ? '+' : '';
+    pnl30dEl.textContent = `${sign}${pnl30d.toFixed(1)}%`;
+    pnl30dEl.style.color = pnl30d >= 0 ? '#00ff88' : '#ff4444';
+  }
+
   const datasets = [{
     label: 'Total Balance',
     data: aggregatedData,
