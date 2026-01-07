@@ -812,7 +812,7 @@ async function loadSummaryView() {
   try {
     const [summaryRes, historyRes, tradesRes] = await Promise.all([
       fetch('/api/summary'),
-      fetch('/api/balance-history/all?days=10'),
+      fetch('/api/balance-history/all?days=30'),
       fetch('/api/trades?account=all&days=2')
     ]);
 
@@ -1098,7 +1098,7 @@ async function fetchSnapshots(date = null) {
       fetch(`/api/snapshots?date=${targetDate}${accountParam}`),
       fetch(`/api/trades?date=${targetDate}${accountParam}`),
       fetch(`/api/tracked-fills?date=${targetDate}${accountParam}`),
-      fetch(`/api/daily-summary?days=10${accountParam}`)
+      fetch(`/api/daily-summary?days=30${accountParam}`)
     ]);
 
     const snapshotsData = await snapshotsRes.json();

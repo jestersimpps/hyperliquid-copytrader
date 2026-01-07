@@ -28,7 +28,9 @@ const FRONTEND_DIR = path.join(__dirname, '../../frontend')
 
 let accountContexts: Map<string, AccountContext> = new Map()
 
-const SAMPLE_INTERVAL_MS = 5 * 60 * 1000
+const SAMPLE_INTERVAL_MS = 30 * 60 * 1000
+const SUMMARY_CACHE_TTL = 30000
+let summaryCache: { data: unknown; timestamp: number } | null = null
 
 app.use(express.static(FRONTEND_DIR))
 
@@ -280,7 +282,7 @@ app.get('/api/balance-history', (req: Request, res: Response) => {
   try {
     const accountId = req.query.account as string
     const daysParam = req.query.days as string
-    const numDays = daysParam ? parseInt(daysParam) : 10
+    const numDays = daysParam ? parseInt(daysParam) : 30
     const balanceHistory: Array<{ timestamp: number; balance: number }> = []
     const trackedHistory: Array<{ timestamp: number; balance: number }> = []
     const today = new Date()
@@ -320,7 +322,7 @@ app.get('/api/balance-history', (req: Request, res: Response) => {
 app.get('/api/balance-history/all', (req: Request, res: Response) => {
   try {
     const daysParam = req.query.days as string
-    const numDays = daysParam ? parseInt(daysParam) : 10
+    const numDays = daysParam ? parseInt(daysParam) : 30
     const today = new Date()
 
     const result: Record<string, Array<{ timestamp: number; balance: number }>> = {}
@@ -368,7 +370,7 @@ app.get('/api/daily-summary', (req: Request, res: Response) => {
   try {
     const accountId = req.query.account as string
     const daysParam = req.query.days as string
-    const numDays = daysParam ? parseInt(daysParam) : 7
+    const numDays = daysParam ? parseInt(daysParam) : 30
     const dailySummary: Array<Record<string, unknown>> = []
     const today = new Date()
 
@@ -457,6 +459,11 @@ function getTradesLast10Min(accountId: string): number {
 
 app.get('/api/summary', async (req: Request, res: Response) => {
   try {
+    if (summaryCache && Date.now() - summaryCache.timestamp < SUMMARY_CACHE_TTL) {
+      res.set('Cache-Control', 'public, max-age=30')
+      return res.json(summaryCache.data)
+    }
+
     const summaries: AccountSummary[] = []
 
     if (accountContexts.size > 0) {
@@ -530,7 +537,7 @@ app.get('/api/summary', async (req: Request, res: Response) => {
     const totalUnrealizedPnl = summaries.reduce((sum, s) => sum + s.unrealizedPnl, 0)
     const totalTradesLast10Min = summaries.reduce((sum, s) => sum + s.tradesLast10Min, 0)
 
-    res.json({
+    const result = {
       accounts: summaries,
       total: {
         balance: totalBalance,
@@ -539,7 +546,11 @@ app.get('/api/summary', async (req: Request, res: Response) => {
         accountCount: summaries.length,
         tradesLast10Min: totalTradesLast10Min
       }
-    })
+    }
+
+    summaryCache = { data: result, timestamp: Date.now() }
+    res.set('Cache-Control', 'public, max-age=30')
+    res.json(result)
   } catch (error) {
     res.status(500).json({ error: 'Failed to get summary' })
   }
