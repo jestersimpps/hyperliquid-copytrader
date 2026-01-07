@@ -554,25 +554,78 @@ h1 {
   letter-spacing: 0.5px;
 }
 
-.daily-cards-container { margin-bottom: 20px; }
-.daily-cards-title { font-size: 1em; margin-bottom: 10px; color: #8899a6; }
+.account-top-row {
+  display: grid;
+  grid-template-columns: 1fr 280px;
+  gap: 20px;
+  margin-bottom: 20px;
+}
 
-.daily-calendar {
+.calendar-column {
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 12px;
-  padding: 12px;
+  padding: 15px;
+}
+
+.stats-column {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 15px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.stat-item {
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.stat-item:last-child {
+  border-bottom: none;
+}
+
+.stat-item .stat-label {
+  font-size: 0.75em;
+  color: #657786;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+
+.stat-item .stat-value {
+  font-size: 1.4em;
+  font-weight: 700;
+  color: #e1e8ed;
+}
+
+.daily-cards-title {
+  font-size: 0.85em;
+  margin-bottom: 12px;
+  color: #657786;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.daily-cards-title #selected-date-display {
+  color: #00d4ff;
+  font-weight: 600;
 }
 
 .daily-calendar-header {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  gap: 4px;
+  gap: 6px;
   margin-bottom: 6px;
 }
 
 .daily-calendar-header span {
-  font-size: 0.65em;
+  font-size: 0.7em;
   color: #657786;
   text-align: center;
   text-transform: uppercase;
@@ -581,25 +634,27 @@ h1 {
 .daily-calendar-grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  gap: 4px;
+  gap: 6px;
 }
 
 .daily-cell {
-  aspect-ratio: 1;
-  border-radius: 6px;
+  border-radius: 8px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   cursor: pointer;
   transition: all 0.2s ease;
   position: relative;
-  min-height: 36px;
+  padding: 6px 4px;
+  min-height: 70px;
+  background: rgba(255, 255, 255, 0.03);
 }
 
 .daily-cell:hover {
-  transform: scale(1.1);
+  transform: scale(1.05);
   z-index: 10;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
 .daily-cell.selected {
@@ -610,74 +665,83 @@ h1 {
 .daily-cell.empty {
   background: transparent;
   cursor: default;
+  min-height: 0;
 }
 
 .daily-cell.empty:hover {
   transform: none;
+  box-shadow: none;
 }
 
 .daily-cell.no-data {
-  background: rgba(255, 255, 255, 0.03);
-  opacity: 0.4;
+  background: rgba(255, 255, 255, 0.02);
+  opacity: 0.5;
 }
 
-.daily-cell.profit-1 { background: rgba(23, 191, 99, 0.2); }
-.daily-cell.profit-2 { background: rgba(23, 191, 99, 0.35); }
-.daily-cell.profit-3 { background: rgba(23, 191, 99, 0.5); }
-.daily-cell.profit-4 { background: rgba(23, 191, 99, 0.7); }
-.daily-cell.profit-5 { background: rgba(23, 191, 99, 0.9); }
+.daily-cell.profit-1 { background: rgba(23, 191, 99, 0.15); }
+.daily-cell.profit-2 { background: rgba(23, 191, 99, 0.25); }
+.daily-cell.profit-3 { background: rgba(23, 191, 99, 0.35); }
+.daily-cell.profit-4 { background: rgba(23, 191, 99, 0.5); }
+.daily-cell.profit-5 { background: rgba(23, 191, 99, 0.65); }
 
-.daily-cell.loss-1 { background: rgba(224, 36, 94, 0.2); }
-.daily-cell.loss-2 { background: rgba(224, 36, 94, 0.35); }
-.daily-cell.loss-3 { background: rgba(224, 36, 94, 0.5); }
-.daily-cell.loss-4 { background: rgba(224, 36, 94, 0.7); }
-.daily-cell.loss-5 { background: rgba(224, 36, 94, 0.9); }
+.daily-cell.loss-1 { background: rgba(224, 36, 94, 0.15); }
+.daily-cell.loss-2 { background: rgba(224, 36, 94, 0.25); }
+.daily-cell.loss-3 { background: rgba(224, 36, 94, 0.35); }
+.daily-cell.loss-4 { background: rgba(224, 36, 94, 0.5); }
+.daily-cell.loss-5 { background: rgba(224, 36, 94, 0.65); }
+
+.daily-cell-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  margin-bottom: 2px;
+}
 
 .daily-cell-day {
-  font-size: 0.75em;
+  font-size: 0.85em;
   font-weight: 600;
   color: #e1e8ed;
 }
 
-.daily-cell.profit-4 .daily-cell-day,
-.daily-cell.profit-5 .daily-cell-day,
-.daily-cell.loss-4 .daily-cell-day,
-.daily-cell.loss-5 .daily-cell-day {
-  color: #fff;
+.daily-cell-pnl {
+  font-size: 0.7em;
+  font-weight: 600;
 }
 
-.daily-cell-pct {
-  font-size: 0.55em;
-  color: #8899a6;
-  margin-top: 1px;
+.daily-cell-pnl.positive { color: #17bf63; }
+.daily-cell-pnl.negative { color: #e0245e; }
+
+.daily-cell-chart {
+  width: 100%;
+  height: 32px;
+  margin-top: auto;
 }
 
-.daily-cell.profit-3 .daily-cell-pct,
-.daily-cell.profit-4 .daily-cell-pct,
-.daily-cell.profit-5 .daily-cell-pct { color: rgba(255,255,255,0.8); }
-.daily-cell.loss-3 .daily-cell-pct,
-.daily-cell.loss-4 .daily-cell-pct,
-.daily-cell.loss-5 .daily-cell-pct { color: rgba(255,255,255,0.8); }
+.daily-cell-chart canvas {
+  width: 100% !important;
+  height: 32px !important;
+}
 
 .daily-calendar-legend {
   display: flex;
   justify-content: center;
   align-items: center;
   gap: 8px;
-  margin-top: 10px;
-  font-size: 0.65em;
+  margin-top: 12px;
+  font-size: 0.7em;
   color: #657786;
 }
 
 .daily-legend-gradient {
   display: flex;
-  gap: 2px;
+  gap: 3px;
 }
 
 .daily-legend-box {
-  width: 12px;
-  height: 12px;
-  border-radius: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
 }
 
 .daily-tooltip {
@@ -709,10 +773,33 @@ h1 {
   color: #8899a6;
 }
 
+@media (max-width: 900px) {
+  .account-top-row {
+    grid-template-columns: 1fr;
+  }
+  .stats-column {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+  .stat-item {
+    flex: 1 1 30%;
+    min-width: 100px;
+    border-bottom: none;
+    border-right: 1px solid rgba(255, 255, 255, 0.05);
+    padding: 8px 12px;
+  }
+  .stat-item:last-child {
+    border-right: none;
+  }
+}
+
 @media (max-width: 768px) {
-  .daily-cell { min-height: 32px; }
-  .daily-cell-day { font-size: 0.7em; }
-  .daily-cell-pct { display: none; }
+  .daily-cell { min-height: 55px; padding: 4px 2px; }
+  .daily-cell-day { font-size: 0.75em; }
+  .daily-cell-pnl { font-size: 0.6em; }
+  .daily-cell-chart { height: 24px; }
+  .daily-cell-chart canvas { height: 24px !important; }
+  .stat-item { flex: 1 1 45%; }
 }
 
 .positions-row {

@@ -109,15 +109,36 @@
     </div>
 
     <div id="account-view" style="display: none;">
-      <div class="daily-cards-container">
-        <div class="daily-cards-title">Select Day</div>
-        <div id="daily-calendar-container"></div>
-      </div>
-
-      <div class="controls">
-        <div class="control-group">
-          <label>Viewing Data For:</label>
-          <span id="selected-date-display" style="font-weight: bold; font-size: 1.1em;">Today</span>
+      <div class="account-top-row">
+        <div class="calendar-column">
+          <div class="daily-cards-title">Select Day <span id="selected-date-display">Today</span></div>
+          <div id="daily-calendar-container"></div>
+        </div>
+        <div class="stats-column">
+          <div class="stat-item">
+            <div class="stat-label">Realized Balance</div>
+            <div class="stat-value" id="realized-balance">$0</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-label">Balance</div>
+            <div class="stat-value" id="balance">$0</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-label">Current PNL</div>
+            <div class="stat-value" id="current-pnl">$0</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-label">Daily PNL</div>
+            <div class="stat-value" id="daily-pnl">$0</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-label">Open Positions</div>
+            <div class="stat-value" id="position-count">0</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-label">Margin Usage</div>
+            <div class="stat-value" id="margin-used">$0</div>
+          </div>
         </div>
       </div>
 
@@ -129,33 +150,6 @@
         <div class="chart-container">
           <div class="chart-title">User Balance</div>
           <canvas id="balance-history-chart"></canvas>
-        </div>
-      </div>
-
-      <div class="stats-grid">
-        <div class="stat-card">
-          <div class="stat-label">Realized Balance</div>
-          <div class="stat-value" id="realized-balance">$0</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">Balance</div>
-          <div class="stat-value" id="balance">$0</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">Current PNL</div>
-          <div class="stat-value" id="current-pnl">$0</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">Daily PNL</div>
-          <div class="stat-value" id="daily-pnl">$0</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">Open Positions</div>
-          <div class="stat-value" id="position-count">0</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">Margin Usage</div>
-          <div class="stat-value" id="margin-used">$0</div>
         </div>
       </div>
 

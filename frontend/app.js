@@ -1466,6 +1466,13 @@ function renderRiskChart() {
 }
 
 function renderDailyCards() {
+  Object.keys(chartInstances).forEach(key => {
+    if (key.startsWith('daily-mini-')) {
+      chartInstances[key].destroy();
+      delete chartInstances[key];
+    }
+  });
+
   const container = document.getElementById('daily-calendar-container');
   if (!container) return;
 
@@ -1530,6 +1537,8 @@ function renderDailyCards() {
       <div class="daily-calendar-grid">
   `;
 
+  const cellsToRenderCharts = [];
+
   for (const week of weeks) {
     for (const cell of week) {
       if (!cell.isInRange || !cell.date) {
@@ -1540,17 +1549,22 @@ function renderDailyCards() {
       const day = cell.data;
       const isSelected = cell.date === selectedDate;
       let cellClass = 'daily-cell';
-      let pctText = '';
+      let pnlText = '';
+      let pnlClass = '';
 
       if (day && day.hasData) {
         cellClass += ` ${getIntensityClass(day.pnlPercentage)}`;
         const sign = day.pnlPercentage >= 0 ? '+' : '';
-        pctText = `${sign}${day.pnlPercentage.toFixed(1)}%`;
+        pnlText = `${sign}${day.pnlPercentage.toFixed(1)}%`;
+        pnlClass = day.pnlPercentage >= 0 ? 'positive' : 'negative';
+        cellsToRenderCharts.push({ date: cell.date, isPositive: day.pnlPercentage >= 0 });
       } else {
         cellClass += ' no-data';
       }
 
       if (isSelected) cellClass += ' selected';
+
+      const chartId = `daily-mini-${cell.date}`;
 
       html += `
         <div class="${cellClass}"
@@ -1559,8 +1573,11 @@ function renderDailyCards() {
              data-pct="${day?.pnlPercentage?.toFixed(2) || '0'}"
              data-balance="${day?.endBalance?.toFixed(0) || '0'}"
              data-has-data="${day?.hasData || false}">
-          <span class="daily-cell-day">${cell.dayNum}</span>
-          ${pctText ? `<span class="daily-cell-pct">${pctText}</span>` : ''}
+          <div class="daily-cell-header">
+            <span class="daily-cell-day">${cell.dayNum}</span>
+            ${pnlText ? `<span class="daily-cell-pnl ${pnlClass}">${pnlText}</span>` : ''}
+          </div>
+          ${day?.hasData ? `<div class="daily-cell-chart"><canvas id="${chartId}"></canvas></div>` : ''}
         </div>
       `;
     }
@@ -1571,11 +1588,11 @@ function renderDailyCards() {
       <div class="daily-calendar-legend">
         <span>Loss</span>
         <div class="daily-legend-gradient">
-          <div class="daily-legend-box" style="background: rgba(224, 36, 94, 0.7);"></div>
-          <div class="daily-legend-box" style="background: rgba(224, 36, 94, 0.35);"></div>
+          <div class="daily-legend-box" style="background: rgba(224, 36, 94, 0.5);"></div>
+          <div class="daily-legend-box" style="background: rgba(224, 36, 94, 0.25);"></div>
           <div class="daily-legend-box" style="background: rgba(255, 255, 255, 0.03);"></div>
-          <div class="daily-legend-box" style="background: rgba(23, 191, 99, 0.35);"></div>
-          <div class="daily-legend-box" style="background: rgba(23, 191, 99, 0.7);"></div>
+          <div class="daily-legend-box" style="background: rgba(23, 191, 99, 0.25);"></div>
+          <div class="daily-legend-box" style="background: rgba(23, 191, 99, 0.5);"></div>
         </div>
         <span>Profit</span>
       </div>
@@ -1595,6 +1612,52 @@ function renderDailyCards() {
     cell.addEventListener('mouseenter', showDailyTooltip);
     cell.addEventListener('mouseleave', hideDailyTooltip);
   });
+
+  for (const { date, isPositive } of cellsToRenderCharts) {
+    renderDailyMiniChart(`daily-mini-${date}`, date, isPositive);
+  }
+}
+
+async function renderDailyMiniChart(chartId, date, isPositive) {
+  try {
+    const accountParam = currentAccountId && currentAccountId !== 'summary' ? `&account=${currentAccountId}` : '';
+    const response = await fetch(`/api/snapshots?date=${date}${accountParam}`);
+    const data = await response.json();
+
+    if (!data.snapshots || data.snapshots.length === 0) return;
+
+    const balances = data.snapshots.map(s => s.user?.accountValue || 0);
+    const color = isPositive ? '#17bf63' : '#e0245e';
+    const ctx = document.getElementById(chartId);
+    if (!ctx) return;
+
+    if (chartInstances[chartId]) {
+      chartInstances[chartId].destroy();
+    }
+
+    chartInstances[chartId] = new Chart(ctx.getContext('2d'), {
+      type: 'line',
+      data: {
+        labels: data.snapshots.map((_, i) => i),
+        datasets: [{
+          data: balances,
+          borderColor: color,
+          borderWidth: 1.5,
+          tension: 0.3,
+          pointRadius: 0,
+          fill: false
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false }, tooltip: { enabled: false } },
+        scales: { x: { display: false }, y: { display: false } }
+      }
+    });
+  } catch (error) {
+    console.error(`Failed to render mini chart for ${date}:`, error);
+  }
 }
 
 function showDailyTooltip(e) {
