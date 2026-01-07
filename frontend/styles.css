@@ -1049,7 +1049,15 @@ h1 {
   .account-tab { flex-shrink: 0; padding: 10px 16px; }
   .stats-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
   .charts-row { grid-template-columns: 1fr; }
-  .balance-history-row { grid-template-columns: 1fr; }
+  .balance-history-row { gap: 10px; margin-bottom: 15px; }
+  .balance-history-row .chart-container { padding: 10px; }
+  .balance-history-row .chart-title { font-size: 0.85em; margin-bottom: 8px; }
+  .balance-history-row canvas { min-height: 150px !important; max-height: 180px !important; }
+  .allocation-cards-row { gap: 10px; margin-bottom: 15px; }
+  .allocation-cards-row .chart-container { padding: 10px; }
+  .allocation-cards-row .chart-title { font-size: 0.85em; }
+  .pie-center-wrapper canvas { max-width: 100px !important; max-height: 100px !important; }
+  .pie-legend { font-size: 0.65em; gap: 4px 8px; }
   .summary-grid { grid-template-columns: 1fr; }
   .positions-table { display: none; }
   .positions-mobile { display: block; }
