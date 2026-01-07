@@ -127,7 +127,7 @@ export class FillProcessorService {
       this.telegramService.sendMessage(`▶️ [${this.accountState.name}] ${fill.coin} resumed - tracked position at >${drawdownThreshold}% loss`)
     }
 
-    if (this.accountState.hrefThreshold >= 0) {
+    if (this.accountState.hrefThreshold > 0) {
       const entryActions: TradeAction[] = ['open', 'add', 'reverse']
       if (entryActions.includes(action.action)) {
         const canEnter = this.checkHrefThreshold(fill.coin)
