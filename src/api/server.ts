@@ -420,6 +420,91 @@ app.get('/api/daily-summary', (req: Request, res: Response) => {
   }
 })
 
+app.get('/api/pnl-comparison', (req: Request, res: Response) => {
+  try {
+    const accountId = req.query.account as string
+    const daysParam = req.query.days as string
+    const numDays = daysParam ? Math.min(parseInt(daysParam), 30) : 7
+    const comparison: Array<Record<string, unknown>> = []
+    const today = new Date()
+
+    const dataDir = accountId ? path.join(DATA_DIR, accountId) : DATA_DIR
+
+    for (let i = 0; i < numDays; i++) {
+      const date = new Date(today)
+      date.setDate(date.getDate() - i)
+      const dateStr = date.toISOString().split('T')[0]
+
+      let actualPnl = 0
+      let estimatedPnl = 0
+      let tradeCount = 0
+      let hasData = false
+
+      const snapshotPath = path.join(dataDir, `snapshots-${dateStr}.jsonl`)
+      if (fs.existsSync(snapshotPath)) {
+        const content = fs.readFileSync(snapshotPath, 'utf-8')
+        const lines = content.trim().split('\n').filter(line => line)
+        if (lines.length > 0) {
+          hasData = true
+          const first = JSON.parse(lines[0])
+          const last = JSON.parse(lines[lines.length - 1])
+          const startBalance = first.user?.accountValue || 0
+          const endBalance = last.user?.accountValue || 0
+          actualPnl = endBalance - startBalance
+        }
+      }
+
+      const tradePath = path.join(dataDir, `trades-${dateStr}.jsonl`)
+      if (fs.existsSync(tradePath)) {
+        const content = fs.readFileSync(tradePath, 'utf-8')
+        const trades = content
+          .trim()
+          .split('\n')
+          .filter(line => line)
+          .map(line => JSON.parse(line))
+        tradeCount = trades.length
+        estimatedPnl = trades.reduce((sum: number, t: Record<string, unknown>) => sum + ((t.realizedPnl as number) || 0), 0)
+      }
+
+      const slippage = estimatedPnl - actualPnl
+      const slippagePercent = estimatedPnl !== 0 ? (slippage / Math.abs(estimatedPnl)) * 100 : 0
+
+      comparison.push({
+        date: dateStr,
+        hasData,
+        actualPnl,
+        estimatedPnl,
+        slippage,
+        slippagePercent,
+        tradeCount
+      })
+    }
+
+    const totals = comparison.reduce((acc: { actualPnl: number; estimatedPnl: number; tradeCount: number }, day) => ({
+      actualPnl: acc.actualPnl + (day.actualPnl as number),
+      estimatedPnl: acc.estimatedPnl + (day.estimatedPnl as number),
+      tradeCount: acc.tradeCount + (day.tradeCount as number)
+    }), { actualPnl: 0, estimatedPnl: 0, tradeCount: 0 })
+
+    const totalSlippage = totals.estimatedPnl - totals.actualPnl
+    const totalSlippagePercent = totals.estimatedPnl !== 0 ? (totalSlippage / Math.abs(totals.estimatedPnl)) * 100 : 0
+
+    res.json({
+      days: comparison,
+      totals: {
+        actualPnl: totals.actualPnl,
+        estimatedPnl: totals.estimatedPnl,
+        slippage: totalSlippage,
+        slippagePercent: totalSlippagePercent,
+        tradeCount: totals.tradeCount
+      },
+      accountId: accountId || 'default'
+    })
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to calculate PnL comparison' })
+  }
+})
+
 interface PositionAggregate {
   count: number
   totalNotional: number

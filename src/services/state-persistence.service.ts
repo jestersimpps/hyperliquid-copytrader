@@ -1,6 +1,6 @@
 import * as fs from 'fs'
 import * as path from 'path'
-import { SubAccountState } from '@/models'
+import { SubAccountState, OrderType } from '@/models'
 
 interface PersistedState {
   tradingPaused: boolean
@@ -9,6 +9,7 @@ interface PersistedState {
   drawdownPausedSymbols: Record<string, number>
   takeProfitMode: boolean
   positionSizeMultiplier: number
+  orderType?: OrderType
 }
 
 type PersistedStates = Record<string, PersistedState>
@@ -38,7 +39,8 @@ export function saveState(accountId: string, state: SubAccountState): void {
       pausedSymbols: Object.fromEntries(state.pausedSymbols),
       drawdownPausedSymbols: Object.fromEntries(state.drawdownPausedSymbols),
       takeProfitMode: state.takeProfitMode,
-      positionSizeMultiplier: state.positionSizeMultiplier
+      positionSizeMultiplier: state.positionSizeMultiplier,
+      orderType: state.orderType
     }
 
     fs.writeFileSync(STATE_FILE, JSON.stringify(allStates, null, 2))
@@ -67,7 +69,8 @@ export function loadState(accountId: string): Partial<SubAccountState> | null {
       pausedSymbols: new Map(Object.entries(persisted.pausedSymbols || {})),
       drawdownPausedSymbols: new Map(Object.entries(persisted.drawdownPausedSymbols || {})),
       takeProfitMode: persisted.takeProfitMode,
-      positionSizeMultiplier: persisted.positionSizeMultiplier
+      positionSizeMultiplier: persisted.positionSizeMultiplier,
+      orderType: persisted.orderType
     }
   } catch (error) {
     console.error(`Failed to load state for ${accountId}:`, error instanceof Error ? error.message : error)

@@ -127,7 +127,7 @@ export class FillProcessorService {
       this.telegramService.sendMessage(`▶️ [${this.accountState.name}] ${fill.coin} resumed - tracked position at >${drawdownThreshold}% loss`)
     }
 
-    if (this.accountState.hrefThreshold > 0) {
+    if (this.accountState.hrefThreshold >= 0) {
       const entryActions: TradeAction[] = ['open', 'add', 'reverse']
       if (entryActions.includes(action.action)) {
         const canEnter = this.checkHrefThreshold(fill.coin)
@@ -255,7 +255,21 @@ export class FillProcessorService {
     const price = parseFloat(fill.px)
     const { userWallet } = this.accountConfig
     const vaultAddress = this.accountConfig.vaultAddress || undefined
+    const useLimit = this.accountState.orderType === 'limit'
 
+    if (useLimit) {
+      await this.executeWithLimitOrder(action, price, vaultAddress)
+    } else {
+      await this.executeWithMarketOrder(action, price, userWallet, vaultAddress)
+    }
+  }
+
+  private async executeWithMarketOrder(
+    action: { action: TradeAction; coin: string; side: 'long' | 'short'; size: number },
+    price: number,
+    userWallet: string,
+    vaultAddress?: string
+  ): Promise<void> {
     switch (action.action) {
       case 'open':
         if (action.side === 'long') {
@@ -284,6 +298,51 @@ export class FillProcessorService {
 
       case 'reduce':
         await this.hyperliquidService.reducePosition(this.accountId, action.coin, action.size, price, userWallet, vaultAddress, this.minOrderValue)
+        break
+    }
+  }
+
+  private async executeWithLimitOrder(
+    action: { action: TradeAction; coin: string; side: 'long' | 'short'; size: number },
+    price: number,
+    vaultAddress?: string
+  ): Promise<void> {
+    const orderTypeLabel = '📋 LIMIT'
+    console.log(`   [${this.accountId}] ${orderTypeLabel} ${action.action.toUpperCase()} ${action.coin}`)
+
+    switch (action.action) {
+      case 'open':
+        if (action.side === 'long') {
+          await this.hyperliquidService.openLongLimit(this.accountId, action.coin, action.size, price, vaultAddress, this.minOrderValue)
+        } else {
+          await this.hyperliquidService.openShortLimit(this.accountId, action.coin, action.size, price, vaultAddress, this.minOrderValue)
+        }
+        break
+
+      case 'close':
+        if (action.side === 'long') {
+          await this.hyperliquidService.closeLongLimit(this.accountId, action.coin, action.size, price, vaultAddress, this.minOrderValue)
+        } else {
+          await this.hyperliquidService.closeShortLimit(this.accountId, action.coin, action.size, price, vaultAddress, this.minOrderValue)
+        }
+        break
+
+      case 'reverse':
+        if (action.side === 'long') {
+          await this.hyperliquidService.closeShortLimit(this.accountId, action.coin, action.size, price, vaultAddress, this.minOrderValue)
+          await this.hyperliquidService.openLongLimit(this.accountId, action.coin, action.size, price, vaultAddress, this.minOrderValue)
+        } else {
+          await this.hyperliquidService.closeLongLimit(this.accountId, action.coin, action.size, price, vaultAddress, this.minOrderValue)
+          await this.hyperliquidService.openShortLimit(this.accountId, action.coin, action.size, price, vaultAddress, this.minOrderValue)
+        }
+        break
+
+      case 'add':
+        await this.hyperliquidService.addToPositionLimit(this.accountId, action.coin, action.size, price, action.side, vaultAddress, this.minOrderValue)
+        break
+
+      case 'reduce':
+        await this.hyperliquidService.reducePositionLimit(this.accountId, action.coin, action.size, price, action.side, vaultAddress, this.minOrderValue)
         break
     }
   }

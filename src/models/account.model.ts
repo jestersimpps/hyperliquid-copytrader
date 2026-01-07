@@ -25,6 +25,8 @@ export interface MultiAccountConfig {
   globalDriftThresholdPercent: number
 }
 
+export type OrderType = 'market' | 'limit'
+
 export interface SubAccountState {
   id: string
   name: string
@@ -34,6 +36,7 @@ export interface SubAccountState {
   drawdownPausedSymbols: Map<string, number>
   takeProfitMode: boolean
   positionSizeMultiplier: number
+  orderType: OrderType
 }
 
 export interface AccountContext {

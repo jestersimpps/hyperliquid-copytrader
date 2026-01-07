@@ -74,6 +74,10 @@ export class BalanceMonitorService {
       const state = this.telegramService.getAccountState(this.accountId)
       if (state) {
         this.fillProcessor.setPositionSizeMultiplier(state.positionSizeMultiplier)
+
+        if (state.orderType === 'limit') {
+          await this.cancelUnfilledOrders(userPositionWallet)
+        }
       }
 
       const snapshot: MonitorSnapshot = {
@@ -183,6 +187,32 @@ export class BalanceMonitorService {
           console.error(`[${this.accountId}] Take profit failed for ${pos.coin}:`, error instanceof Error ? error.message : error)
         }
       }
+    }
+  }
+
+  private async cancelUnfilledOrders(wallet: string): Promise<void> {
+    try {
+      const openOrders = await this.hyperliquidService.getOpenOrders(wallet)
+
+      if (openOrders.length === 0) return
+
+      console.log(`[${this.accountId}] 🔄 Cancelling ${openOrders.length} unfilled limit order(s)...`)
+
+      const coinSet = new Set(openOrders.map(o => o.coin))
+      const vaultAddress = this.accountConfig.vaultAddress || undefined
+
+      for (const coin of coinSet) {
+        try {
+          const cancelled = await this.hyperliquidService.cancelAllOrders(this.accountId, coin, vaultAddress)
+          if (cancelled > 0) {
+            console.log(`   [${this.accountId}] ✓ Cancelled ${cancelled} order(s) for ${coin}`)
+          }
+        } catch (error) {
+          console.error(`   [${this.accountId}] ✗ Failed to cancel ${coin} orders:`, error instanceof Error ? error.message : error)
+        }
+      }
+    } catch (error) {
+      console.error(`[${this.accountId}] Failed to get open orders:`, error instanceof Error ? error.message : error)
     }
   }
 }

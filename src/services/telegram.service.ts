@@ -235,6 +235,13 @@ export class TelegramService {
           }
           break
 
+        case 'ordertype':
+          if (parts.length >= 3) {
+            const orderType = parts[2] as 'market' | 'limit'
+            await this.setOrderType(accountId, orderType)
+          }
+          break
+
         case 'back':
           this.selectedAccountId = null
           await this.sendAccountSelector()
@@ -292,7 +299,7 @@ export class TelegramService {
     const keyboard: TelegramBot.InlineKeyboardButton[][] = []
     let messageText = ''
 
-    const statusStr = state.tradingPaused ? '⏸️ PAUSED' : (state.hrefThreshold > 0 ? `🔗 HREF ${state.hrefThreshold}%` : (state.takeProfitMode ? '💰 TP' : '✅ ACTIVE'))
+    const statusStr = state.tradingPaused ? '⏸️ PAUSED' : (state.hrefThreshold >= 0 ? `🔗 HREF ${state.hrefThreshold}%` : (state.takeProfitMode ? '💰 TP' : '✅ ACTIVE'))
     messageText = `🎛️ *${data.config.name}* (${statusStr})\n`
     messageText += `Tracking: \`${this.formatAddress(data.config.trackedWallet)}\`\n`
 
@@ -396,10 +403,10 @@ export class TelegramService {
     keyboard.push([{ text: '━━━ 🔗 HREF ━━━', callback_data: 'noop' }])
     const hrefThreshold = state.hrefThreshold
     keyboard.push([
-      { text: hrefThreshold === 0 ? '✓ Off' : 'Off', callback_data: `href:${accountId}:0` },
+      { text: hrefThreshold === -1 ? '✓ Off' : 'Off', callback_data: `href:${accountId}:-1` },
+      { text: hrefThreshold === 0 ? '✓ 0%' : '0%', callback_data: `href:${accountId}:0` },
       { text: hrefThreshold === 1 ? '✓ 1%' : '1%', callback_data: `href:${accountId}:1` },
-      { text: hrefThreshold === 2 ? '✓ 2%' : '2%', callback_data: `href:${accountId}:2` },
-      { text: hrefThreshold === 5 ? '✓ 5%' : '5%', callback_data: `href:${accountId}:5` }
+      { text: hrefThreshold === 2 ? '✓ 2%' : '2%', callback_data: `href:${accountId}:2` }
     ])
 
     keyboard.push([{ text: '━━━ 📐 Size ━━━', callback_data: 'noop' }])
@@ -415,6 +422,13 @@ export class TelegramService {
       ? { text: '✓ Enabled', callback_data: `takeprofit_off:${accountId}` }
       : { text: 'Disabled', callback_data: `takeprofit_on:${accountId}` }
     keyboard.push([takeProfitButton])
+
+    keyboard.push([{ text: '━━━ 📦 Order Type ━━━', callback_data: 'noop' }])
+    const orderType = state.orderType
+    keyboard.push([
+      { text: orderType === 'market' ? '✓ Market' : 'Market', callback_data: `ordertype:${accountId}:market` },
+      { text: orderType === 'limit' ? '✓ Limit' : 'Limit', callback_data: `ordertype:${accountId}:limit` }
+    ])
 
     keyboard.push([
       { text: '📊 Status', callback_data: `status:${accountId}` },
@@ -451,7 +465,8 @@ export class TelegramService {
       totalPositions += posCount
 
       const state = this.accountStates.get(accountId)
-      const statusIcon = state?.tradingPaused ? '⏸️' : (state?.hrefThreshold ? '🔗' : '✅')
+      const hrefEnabled = state?.hrefThreshold !== undefined && state.hrefThreshold >= 0
+      const statusIcon = state?.tradingPaused ? '⏸️' : (hrefEnabled ? '🔗' : '✅')
       const pnlSign = pnl >= 0 ? '+' : ''
 
       message += `${statusIcon} *${data.config.name}*\n`
@@ -523,7 +538,8 @@ export class TelegramService {
 
     for (const [accountId, data] of this.accountSnapshots) {
       const state = this.accountStates.get(accountId)
-      const statusIcon = state?.tradingPaused ? '⏸️' : (state?.hrefThreshold ? '🔗' : '✅')
+      const hrefEnabled = state?.hrefThreshold !== undefined && state.hrefThreshold >= 0
+      const statusIcon = state?.tradingPaused ? '⏸️' : (hrefEnabled ? '🔗' : '✅')
       message += `${statusIcon} *${data.config.name}* (\`${accountId}\`)\n`
       message += `   Tracked: \`${this.formatAddress(data.config.trackedWallet)}\`\n`
       message += `   User: \`${this.formatAddress(data.config.userWallet)}\`\n\n`
@@ -555,7 +571,7 @@ export class TelegramService {
 
     state.hrefThreshold = threshold
     saveState(accountId, state)
-    const label = threshold === 0 ? 'Off' : `${threshold}%`
+    const label = threshold < 0 ? 'Off' : `${threshold}%`
     await this.sendMessage(`🔗 [${data.config.name}] HREF mode: *${label}*`)
     await this.sendAccountMenu(accountId)
   }
@@ -936,6 +952,21 @@ export class TelegramService {
     saveState(accountId, state)
     const label = multiplier === 0.25 ? '¼x (Safe)' : multiplier === 0.5 ? '½x (Conservative)' : '1x (Aggressive)'
     await this.sendMessage(`📊 [${data.config.name}] Position size mode: *${label}*`)
+    await this.sendAccountMenu(accountId)
+  }
+
+  private async setOrderType(accountId: string, orderType: 'market' | 'limit'): Promise<void> {
+    const state = this.accountStates.get(accountId)
+    const data = this.accountSnapshots.get(accountId)
+    if (!state || !data) {
+      await this.sendMessage('⚠️ Account not found')
+      return
+    }
+
+    state.orderType = orderType
+    saveState(accountId, state)
+    const label = orderType === 'market' ? 'Market (IOC)' : 'Limit (GTC)'
+    await this.sendMessage(`📦 [${data.config.name}] Order type: *${label}*`)
     await this.sendAccountMenu(accountId)
   }
 

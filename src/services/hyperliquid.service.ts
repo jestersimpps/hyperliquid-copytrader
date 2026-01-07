@@ -19,6 +19,7 @@ interface CoinMeta {
 export class HyperliquidService {
   private publicClient: PublicClient
   private walletClients: Map<string, WalletClient> = new Map()
+  private walletAddresses: Map<string, string> = new Map()
   private httpTransport: HttpTransport
   private isTestnet: boolean
   private metaCache: Map<string, CoinMeta> = new Map()
@@ -54,6 +55,7 @@ export class HyperliquidService {
       isTestnet: this.isTestnet
     })
     this.walletClients.set(accountId, walletClient)
+    this.walletAddresses.set(accountId, account.address)
   }
 
   private getWalletClient(accountId: string): WalletClient {
@@ -478,5 +480,156 @@ export class HyperliquidService {
 
   canExecuteTrades(accountId: string): boolean {
     return this.walletClients.has(accountId)
+  }
+
+  async placeLimitBuy(
+    accountId: string,
+    coin: string,
+    size: number,
+    price: number,
+    reduceOnly: boolean = false,
+    vaultAddress?: string,
+    minOrderValue?: number
+  ): Promise<OrderResponse> {
+    const walletClient = this.getWalletClient(accountId)
+    const coinIndex = this.getCoinIndex(coin)
+    const validated = this.validateOrderSize(size, coin, price, minOrderValue)
+    const priceString = await this.formatPrice(price, coin)
+
+    const orderParams: Parameters<typeof walletClient.order>[0] = {
+      orders: [{
+        a: coinIndex,
+        b: true,
+        p: priceString,
+        s: validated.formattedSize,
+        r: reduceOnly,
+        t: { limit: { tif: 'Gtc' } }
+      }],
+      grouping: 'na'
+    }
+
+    if (vaultAddress) {
+      orderParams.vaultAddress = vaultAddress as `0x${string}`
+    }
+
+    const response = await walletClient.order(orderParams)
+    const status = response.response.data.statuses[0]
+    if (status && 'error' in status) {
+      throw new Error(status.error)
+    }
+    return response
+  }
+
+  async placeLimitSell(
+    accountId: string,
+    coin: string,
+    size: number,
+    price: number,
+    reduceOnly: boolean = false,
+    vaultAddress?: string,
+    minOrderValue?: number
+  ): Promise<OrderResponse> {
+    const walletClient = this.getWalletClient(accountId)
+    const coinIndex = this.getCoinIndex(coin)
+    const validated = this.validateOrderSize(size, coin, price, minOrderValue)
+    const priceString = await this.formatPrice(price, coin)
+
+    const orderParams: Parameters<typeof walletClient.order>[0] = {
+      orders: [{
+        a: coinIndex,
+        b: false,
+        p: priceString,
+        s: validated.formattedSize,
+        r: reduceOnly,
+        t: { limit: { tif: 'Gtc' } }
+      }],
+      grouping: 'na'
+    }
+
+    if (vaultAddress) {
+      orderParams.vaultAddress = vaultAddress as `0x${string}`
+    }
+
+    const response = await walletClient.order(orderParams)
+    const status = response.response.data.statuses[0]
+    if (status && 'error' in status) {
+      throw new Error(status.error)
+    }
+    return response
+  }
+
+  async cancelOrder(accountId: string, coin: string, orderId: number, vaultAddress?: string): Promise<void> {
+    const walletClient = this.getWalletClient(accountId)
+    const coinIndex = this.getCoinIndex(coin)
+
+    const cancelParams: Parameters<typeof walletClient.cancel>[0] = {
+      cancels: [{ a: coinIndex, o: orderId }]
+    }
+
+    if (vaultAddress) {
+      cancelParams.vaultAddress = vaultAddress as `0x${string}`
+    }
+
+    await walletClient.cancel(cancelParams)
+  }
+
+  async cancelAllOrders(accountId: string, coin: string, vaultAddress?: string): Promise<number> {
+    const walletClient = this.getWalletClient(accountId)
+    const positionWallet = vaultAddress || this.walletAddresses.get(accountId)
+    if (!positionWallet) return 0
+
+    const openOrders = await this.publicClient.openOrders({ user: positionWallet as `0x${string}` })
+    const coinOrders = openOrders.filter(o => o.coin === coin)
+
+    if (coinOrders.length === 0) return 0
+
+    const coinIndex = this.getCoinIndex(coin)
+    const cancelParams: Parameters<typeof walletClient.cancel>[0] = {
+      cancels: coinOrders.map(o => ({ a: coinIndex, o: o.oid }))
+    }
+
+    if (vaultAddress) {
+      cancelParams.vaultAddress = vaultAddress as `0x${string}`
+    }
+
+    await walletClient.cancel(cancelParams)
+    return coinOrders.length
+  }
+
+  async getOpenOrders(wallet: string): Promise<Array<{ coin: string; oid: number; side: string; sz: string; limitPx: string }>> {
+    const orders = await this.publicClient.openOrders({ user: wallet as `0x${string}` })
+    return orders
+  }
+
+  async openLongLimit(accountId: string, coin: string, size: number, price: number, vaultAddress?: string, minOrderValue?: number): Promise<OrderResponse> {
+    return await this.placeLimitBuy(accountId, coin, size, price, false, vaultAddress, minOrderValue)
+  }
+
+  async openShortLimit(accountId: string, coin: string, size: number, price: number, vaultAddress?: string, minOrderValue?: number): Promise<OrderResponse> {
+    return await this.placeLimitSell(accountId, coin, size, price, false, vaultAddress, minOrderValue)
+  }
+
+  async closeLongLimit(accountId: string, coin: string, size: number, price: number, vaultAddress?: string, minOrderValue?: number): Promise<OrderResponse> {
+    return await this.placeLimitSell(accountId, coin, size, price, true, vaultAddress, minOrderValue)
+  }
+
+  async closeShortLimit(accountId: string, coin: string, size: number, price: number, vaultAddress?: string, minOrderValue?: number): Promise<OrderResponse> {
+    return await this.placeLimitBuy(accountId, coin, size, price, true, vaultAddress, minOrderValue)
+  }
+
+  async addToPositionLimit(accountId: string, coin: string, size: number, price: number, side: 'long' | 'short', vaultAddress?: string, minOrderValue?: number): Promise<OrderResponse> {
+    if (side === 'long') {
+      return await this.placeLimitBuy(accountId, coin, size, price, false, vaultAddress, minOrderValue)
+    } else {
+      return await this.placeLimitSell(accountId, coin, size, price, false, vaultAddress, minOrderValue)
+    }
+  }
+
+  async reducePositionLimit(accountId: string, coin: string, size: number, price: number, side: 'long' | 'short', vaultAddress?: string, minOrderValue?: number): Promise<OrderResponse> {
+    if (side === 'long') {
+      return await this.placeLimitSell(accountId, coin, size, price, true, vaultAddress, minOrderValue)
+    } else {
+      return await this.placeLimitBuy(accountId, coin, size, price, true, vaultAddress, minOrderValue)
+    }
   }
 }

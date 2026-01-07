@@ -4,6 +4,7 @@ let filteredSnapshots = [];
 let allTrades = [];
 let trackedFills = [];
 let dailySummaryData = [];
+let pnlComparisonData = null;
 let allBalanceHistory = {};
 let selectedDate = new Date().toISOString().split('T')[0];
 let chartInstances = {};
@@ -1104,22 +1105,25 @@ async function fetchSnapshots(date = null) {
     const targetDate = date || selectedDate;
     const accountParam = currentAccountId && currentAccountId !== 'summary' ? `&account=${currentAccountId}` : '';
 
-    const [snapshotsRes, tradesRes, trackedFillsRes, summaryRes] = await Promise.all([
+    const [snapshotsRes, tradesRes, trackedFillsRes, summaryRes, pnlCompRes] = await Promise.all([
       fetch(`/api/snapshots?date=${targetDate}${accountParam}`),
       fetch(`/api/trades?date=${targetDate}${accountParam}`),
       fetch(`/api/tracked-fills?date=${targetDate}${accountParam}`),
-      fetch(`/api/daily-summary?days=30${accountParam}`)
+      fetch(`/api/daily-summary?days=30${accountParam}`),
+      fetch(`/api/pnl-comparison?days=1${accountParam}`)
     ]);
 
     const snapshotsData = await snapshotsRes.json();
     const tradesData = await tradesRes.json();
     const trackedFillsData = await trackedFillsRes.json();
     const summaryData = await summaryRes.json();
+    const pnlCompData = await pnlCompRes.json();
 
     filteredSnapshots = snapshotsData.snapshots || [];
     allTrades = tradesData.trades || [];
     trackedFills = trackedFillsData.fills || [];
     dailySummaryData = summaryData.days || [];
+    pnlComparisonData = pnlCompData.days?.[0] || null;
 
     if (filteredSnapshots.length === 0) {
       showNoData(targetDate);
@@ -1294,6 +1298,18 @@ function updateStats() {
   const dailyPnlEl = document.getElementById('daily-pnl');
   dailyPnlEl.textContent = `$${dailyPnl.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
   dailyPnlEl.className = `stat-value ${dailyPnl >= 0 ? 'positive' : 'negative'}`;
+
+  const slippageEl = document.getElementById('daily-slippage');
+  if (pnlComparisonData && pnlComparisonData.hasData) {
+    const slippage = pnlComparisonData.slippage || 0;
+    slippageEl.textContent = `$${slippage.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+    slippageEl.className = `stat-value ${slippage >= 0 ? 'positive' : 'negative'}`;
+    slippageEl.title = `Est: $${(pnlComparisonData.estimatedPnl || 0).toFixed(2)} | Actual: $${(pnlComparisonData.actualPnl || 0).toFixed(2)}`;
+  } else {
+    slippageEl.textContent = '$0';
+    slippageEl.className = 'stat-value';
+    slippageEl.title = '';
+  }
 
   document.getElementById('position-count').textContent = user.positions?.length || 0;
   document.getElementById('margin-used').textContent = `$${(user.totalMarginUsed || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
