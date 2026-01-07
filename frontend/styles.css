@@ -815,15 +815,101 @@ h1 {
 }
 
 @media (max-width: 768px) {
-  .daily-cell { min-height: 55px; padding: 4px 2px; }
-  .daily-cell-day { font-size: 0.75em; }
-  .daily-cell-pnl { font-size: 0.6em; }
-  .daily-cell-chart { height: 24px; }
-  .daily-cell-chart canvas { height: 24px !important; }
-  .stats-section { flex: 1 1 100%; }
+  .account-top-row {
+    gap: 12px;
+  }
+  .calendar-column {
+    padding: 10px;
+  }
+  .daily-cards-title {
+    font-size: 0.75em;
+    margin-bottom: 8px;
+  }
+  .daily-calendar-header {
+    gap: 3px;
+    margin-bottom: 4px;
+  }
+  .daily-calendar-header span {
+    font-size: 0.6em;
+  }
+  .daily-calendar-grid {
+    gap: 3px;
+  }
+  .daily-cell {
+    min-height: 50px;
+    padding: 4px 2px;
+    border-radius: 6px;
+  }
+  .daily-cell-header {
+    flex-direction: column;
+    align-items: center;
+    gap: 1px;
+  }
+  .daily-cell-day {
+    font-size: 0.8em;
+  }
+  .daily-cell-pnl {
+    font-size: 0.55em;
+  }
+  .daily-cell-chart {
+    height: 20px;
+  }
+  .daily-cell-chart canvas {
+    height: 20px !important;
+  }
+  .daily-calendar-legend {
+    margin-top: 8px;
+    font-size: 0.6em;
+  }
+  .daily-legend-box {
+    width: 10px;
+    height: 10px;
+  }
+  .stats-column {
+    padding: 10px;
+  }
+  .stats-section {
+    flex: 1 1 100%;
+    padding: 8px 0;
+  }
   .stats-section:not(:last-child) {
     border-right: none;
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  }
+  .stats-section-title {
+    font-size: 0.65em;
+    margin-bottom: 6px;
+  }
+  .stat-item {
+    padding: 3px 0;
+  }
+  .stat-item .stat-label {
+    font-size: 0.7em;
+  }
+  .stat-item .stat-value {
+    font-size: 1em;
+  }
+}
+
+@media (max-width: 480px) {
+  .daily-cell {
+    min-height: 42px;
+    padding: 3px 1px;
+  }
+  .daily-cell-day {
+    font-size: 0.7em;
+  }
+  .daily-cell-pnl {
+    display: none;
+  }
+  .daily-cell-chart {
+    height: 16px;
+  }
+  .daily-cell-chart canvas {
+    height: 16px !important;
+  }
+  .daily-calendar-header span {
+    font-size: 0.55em;
   }
 }
 
