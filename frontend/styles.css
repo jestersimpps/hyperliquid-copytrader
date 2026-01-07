@@ -621,6 +621,9 @@ h1 {
   color: #e1e8ed;
 }
 
+.stat-item .stat-value.positive { color: #17bf63; }
+.stat-item .stat-value.negative { color: #e0245e; }
+
 .daily-cards-title {
   font-size: 0.85em;
   margin-bottom: 12px;
