@@ -315,6 +315,10 @@ function renderFillsList(type, isNew = false) {
     const pnlClass = pnl >= 0 ? 'positive' : 'negative';
     const pnlSign = pnl >= 0 ? '+' : '';
     const pnlText = pnl !== 0 ? `${pnlSign}$${Math.abs(pnl).toFixed(2)}` : '-';
+    const fee = fill.fee ? parseFloat(fill.fee) : 0;
+    const feeText = fee !== 0 ? `$${Math.abs(fee).toFixed(2)}` : '-';
+    const feePct = usdValue > 0 ? (Math.abs(fee) / usdValue) * 100 : 0;
+    const feePctText = fee !== 0 ? `${feePct.toFixed(2)}%` : '-';
     const newClass = isNew && index === 0 ? 'new' : '';
 
     return `
@@ -325,6 +329,8 @@ function renderFillsList(type, isNew = false) {
         <span class="fill-size">${size}</span>
         <span class="fill-usd">${usdText}</span>
         <span class="fill-price">$${price}</span>
+        <span class="fill-fee">${feeText}</span>
+        <span class="fill-fee-pct">${feePctText}</span>
         <span class="fill-pnl ${pnlClass}">${pnlText}</span>
       </div>
     `;

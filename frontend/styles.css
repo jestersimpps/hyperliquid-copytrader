@@ -325,7 +325,7 @@ h1 {
 
 .fill-item {
   display: grid;
-  grid-template-columns: 50px 55px 40px 70px 50px 80px 60px;
+  grid-template-columns: 50px 55px 40px 70px 50px 80px 50px 45px 60px;
   gap: 6px;
   align-items: center;
   padding: 6px 10px;
@@ -388,6 +388,18 @@ h1 {
 .fill-item .fill-time {
   color: #657786;
   text-align: center;
+}
+
+.fill-item .fill-fee {
+  color: #e0245e;
+  text-align: right;
+  font-size: 0.9em;
+}
+
+.fill-item .fill-fee-pct {
+  color: #8899a6;
+  text-align: right;
+  font-size: 0.9em;
 }
 
 .fill-item .fill-pnl {
@@ -1065,7 +1077,7 @@ h1 {
   .positions-table { display: none; }
   .positions-mobile { display: block; }
   .fills-section { grid-template-columns: 1fr; }
-  .fill-item { grid-template-columns: 45px 50px 35px 55px 45px 65px 50px; gap: 4px; font-size: 0.75em; padding: 5px 8px; }
+  .fill-item { grid-template-columns: 45px 50px 35px 55px 45px 60px 45px 40px 50px; gap: 4px; font-size: 0.75em; padding: 5px 8px; }
 }
 
 @media (min-width: 769px) and (max-width: 1024px) {
