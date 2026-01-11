@@ -1,4 +1,4 @@
-# CopyScalper
+# Hyperscalper
 
 A high-performance copy trading bot for Hyperliquid DEX with real-time dashboard.
 
@@ -7,10 +7,12 @@ A high-performance copy trading bot for Hyperliquid DEX with real-time dashboard
 ## Features
 
 - **Real-time copy trading** via WebSocket fill detection
-- **Multi-account support** with independent tracking
+- **Multi-account support** with independent private keys
 - **Smart position sizing** based on balance ratios
+- **Limit orders** to reduce slippage with tracking in dashboard
 - **Position drift sync** to maintain alignment with tracked wallets
-- **Web dashboard** with live metrics, charts, and activity heatmap
+- **Web dashboard** with live metrics, 30-day calendar heatmap, and fee tracking
+- **Mobile responsive** design
 - **Telegram notifications** (optional)
 
 ## Quick Start
@@ -27,7 +29,6 @@ Edit `accounts.json`:
 
 ```json
 {
-  "privateKey": "0x...",
   "isTestnet": false,
   "globalMinOrderValue": 11,
   "globalDriftThresholdPercent": 1,
@@ -41,6 +42,7 @@ Edit `accounts.json`:
     {
       "id": "A",
       "name": "Trader 1",
+      "privateKey": "0x...",
       "trackedWallet": "0x...",
       "userWallet": "0x...",
       "vaultAddress": "0x...",
@@ -53,10 +55,11 @@ Edit `accounts.json`:
 ## Dashboard
 
 Access at `http://localhost:3000` - includes:
-- Combined balance history across accounts
+- 30-day balance history with daily charts
+- Calendar heatmap with per-day performance stats
 - Real-time P&L tracking (realized/unrealized)
+- Live fills with fee and slippage tracking
 - Position allocation pie charts
-- 24h trading activity heatmap
 - Risk metrics (margin, drawdown, leverage)
 
 ## License
