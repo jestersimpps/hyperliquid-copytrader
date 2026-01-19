@@ -220,12 +220,11 @@ export class TelegramService {
           }
           break
 
-        case 'takeprofit_on':
-          await this.setTakeProfitMode(accountId, true)
-          break
-
-        case 'takeprofit_off':
-          await this.setTakeProfitMode(accountId, false)
+        case 'takeprofit':
+          if (parts.length >= 3) {
+            const threshold = parseInt(parts[2])
+            await this.setTakeProfitThreshold(accountId, threshold)
+          }
           break
 
         case 'size':
@@ -299,7 +298,7 @@ export class TelegramService {
     const keyboard: TelegramBot.InlineKeyboardButton[][] = []
     let messageText = ''
 
-    const statusStr = state.tradingPaused ? '⏸️ PAUSED' : (state.hrefThreshold > 0 ? `🔗 HREF ${state.hrefThreshold}%` : (state.takeProfitMode ? '💰 TP' : '✅ ACTIVE'))
+    const statusStr = state.tradingPaused ? '⏸️ PAUSED' : (state.hrefThreshold > 0 ? `🔗 HREF ${state.hrefThreshold}%` : (state.takeProfitThreshold > 0 ? `💰 TP ${state.takeProfitThreshold}%` : '✅ ACTIVE'))
     messageText = `🎛️ *${data.config.name}* (${statusStr})\n`
     messageText += `Tracking: \`${this.formatAddress(data.config.trackedWallet)}\`\n`
 
@@ -418,10 +417,13 @@ export class TelegramService {
     ])
 
     keyboard.push([{ text: '━━━ 💰 Take Profit ━━━', callback_data: 'noop' }])
-    const takeProfitButton = state.takeProfitMode
-      ? { text: '✓ Enabled', callback_data: `takeprofit_off:${accountId}` }
-      : { text: 'Disabled', callback_data: `takeprofit_on:${accountId}` }
-    keyboard.push([takeProfitButton])
+    const tpThreshold = state.takeProfitThreshold
+    keyboard.push([
+      { text: tpThreshold === 0 ? '✓ Off' : 'Off', callback_data: `takeprofit:${accountId}:0` },
+      { text: tpThreshold === 1 ? '✓ 1%' : '1%', callback_data: `takeprofit:${accountId}:1` },
+      { text: tpThreshold === 2 ? '✓ 2%' : '2%', callback_data: `takeprofit:${accountId}:2` },
+      { text: tpThreshold === 5 ? '✓ 5%' : '5%', callback_data: `takeprofit:${accountId}:5` }
+    ])
 
     keyboard.push([{ text: '━━━ 📦 Order Type ━━━', callback_data: 'noop' }])
     const orderType = state.orderType
@@ -922,7 +924,7 @@ export class TelegramService {
     await this.sendAccountMenu(accountId)
   }
 
-  private async setTakeProfitMode(accountId: string, enabled: boolean): Promise<void> {
+  private async setTakeProfitThreshold(accountId: string, threshold: number): Promise<void> {
     const state = this.accountStates.get(accountId)
     const data = this.accountSnapshots.get(accountId)
     if (!state || !data) {
@@ -930,11 +932,11 @@ export class TelegramService {
       return
     }
 
-    state.takeProfitMode = enabled
+    state.takeProfitThreshold = threshold
     saveState(accountId, state)
-    await this.sendMessage(enabled
-      ? `💰 [${data.config.name}] Take profit mode *enabled*\nPositions will auto-close at +1% profit`
-      : `💰 [${data.config.name}] Take profit mode *disabled*`)
+    await this.sendMessage(threshold > 0
+      ? `💰 [${data.config.name}] Take profit set to *${threshold}%*\nPositions will auto-close at +${threshold}% profit`
+      : `💰 [${data.config.name}] Take profit *disabled*`)
     await this.sendAccountMenu(accountId)
   }
 

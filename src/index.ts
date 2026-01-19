@@ -71,13 +71,13 @@ async function main(): Promise<void> {
       hrefThreshold: savedState?.hrefThreshold ?? 0,
       pausedSymbols: savedState?.pausedSymbols ?? new Map(),
       drawdownPausedSymbols: savedState?.drawdownPausedSymbols ?? new Map(),
-      takeProfitMode: savedState?.takeProfitMode ?? false,
+      takeProfitThreshold: savedState?.takeProfitThreshold ?? 0,
       positionSizeMultiplier: savedState?.positionSizeMultiplier ?? 1,
       orderType: savedState?.orderType ?? 'market'
     }
 
     if (savedState) {
-      console.log(`   [${accountId}] Restored state: HREF=${state.hrefThreshold}%, TP=${state.takeProfitMode}, Size=${state.positionSizeMultiplier}x`)
+      console.log(`   [${accountId}] Restored state: HREF=${state.hrefThreshold}%, TP=${state.takeProfitThreshold}%, Size=${state.positionSizeMultiplier}x`)
     }
 
     const loggerService = new LoggerService(accountId)

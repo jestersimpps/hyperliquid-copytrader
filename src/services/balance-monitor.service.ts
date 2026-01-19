@@ -147,15 +147,16 @@ export class BalanceMonitorService {
 
   private async checkTakeProfitMode(userPositions: Position[], userBalance: number): Promise<void> {
     const state = this.telegramService.getAccountState(this.accountId)
-    if (!state?.takeProfitMode) return
+    if (!state?.takeProfitThreshold || state.takeProfitThreshold <= 0) return
 
     const { userWallet, vaultAddress } = this.accountConfig
+    const threshold = state.takeProfitThreshold
 
     for (const pos of userPositions) {
       const profitPercent = (pos.unrealizedPnl / userBalance) * 100
 
-      if (profitPercent > 1) {
-        console.log(`[${this.accountId}] 💰 Take profit: ${pos.coin} at +${profitPercent.toFixed(2)}%`)
+      if (profitPercent > threshold) {
+        console.log(`[${this.accountId}] 💰 Take profit: ${pos.coin} at +${profitPercent.toFixed(2)}% (threshold: ${threshold}%)`)
 
         try {
           await this.hyperliquidService.closePosition(

@@ -34,7 +34,7 @@ export interface SubAccountState {
   hrefThreshold: number
   pausedSymbols: Map<string, number>
   drawdownPausedSymbols: Map<string, number>
-  takeProfitMode: boolean
+  takeProfitThreshold: number
   positionSizeMultiplier: number
   orderType: OrderType
 }

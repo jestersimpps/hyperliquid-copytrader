@@ -7,7 +7,7 @@ interface PersistedState {
   hrefThreshold: number
   pausedSymbols: Record<string, number>
   drawdownPausedSymbols: Record<string, number>
-  takeProfitMode: boolean
+  takeProfitThreshold: number
   positionSizeMultiplier: number
   orderType?: OrderType
 }
@@ -38,7 +38,7 @@ export function saveState(accountId: string, state: SubAccountState): void {
       hrefThreshold: state.hrefThreshold,
       pausedSymbols: Object.fromEntries(state.pausedSymbols),
       drawdownPausedSymbols: Object.fromEntries(state.drawdownPausedSymbols),
-      takeProfitMode: state.takeProfitMode,
+      takeProfitThreshold: state.takeProfitThreshold,
       positionSizeMultiplier: state.positionSizeMultiplier,
       orderType: state.orderType
     }
@@ -68,7 +68,7 @@ export function loadState(accountId: string): Partial<SubAccountState> | null {
       hrefThreshold: persisted.hrefThreshold,
       pausedSymbols: new Map(Object.entries(persisted.pausedSymbols || {})),
       drawdownPausedSymbols: new Map(Object.entries(persisted.drawdownPausedSymbols || {})),
-      takeProfitMode: persisted.takeProfitMode,
+      takeProfitThreshold: persisted.takeProfitThreshold ?? (persisted as any).takeProfitMode ? 1 : 0,
       positionSizeMultiplier: persisted.positionSizeMultiplier,
       orderType: persisted.orderType
     }
