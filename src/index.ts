@@ -73,7 +73,8 @@ async function main(): Promise<void> {
       drawdownPausedSymbols: savedState?.drawdownPausedSymbols ?? new Map(),
       takeProfitThreshold: savedState?.takeProfitThreshold ?? 0,
       positionSizeMultiplier: savedState?.positionSizeMultiplier ?? 1,
-      orderType: savedState?.orderType ?? 'market'
+      orderType: savedState?.orderType ?? 'market',
+      positionPeaks: savedState?.positionPeaks ?? new Map()
     }
 
     if (savedState) {

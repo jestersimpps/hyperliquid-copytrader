@@ -10,6 +10,7 @@ interface PersistedState {
   takeProfitThreshold: number
   positionSizeMultiplier: number
   orderType?: OrderType
+  positionPeaks?: Record<string, number>
 }
 
 type PersistedStates = Record<string, PersistedState>
@@ -40,7 +41,8 @@ export function saveState(accountId: string, state: SubAccountState): void {
       drawdownPausedSymbols: Object.fromEntries(state.drawdownPausedSymbols),
       takeProfitThreshold: state.takeProfitThreshold,
       positionSizeMultiplier: state.positionSizeMultiplier,
-      orderType: state.orderType
+      orderType: state.orderType,
+      positionPeaks: Object.fromEntries(state.positionPeaks)
     }
 
     fs.writeFileSync(STATE_FILE, JSON.stringify(allStates, null, 2))
@@ -70,7 +72,8 @@ export function loadState(accountId: string): Partial<SubAccountState> | null {
       drawdownPausedSymbols: new Map(Object.entries(persisted.drawdownPausedSymbols || {})),
       takeProfitThreshold: persisted.takeProfitThreshold ?? (persisted as any).takeProfitMode ? 1 : 0,
       positionSizeMultiplier: persisted.positionSizeMultiplier,
-      orderType: persisted.orderType
+      orderType: persisted.orderType,
+      positionPeaks: new Map(Object.entries(persisted.positionPeaks || {}))
     }
   } catch (error) {
     console.error(`Failed to load state for ${accountId}:`, error instanceof Error ? error.message : error)

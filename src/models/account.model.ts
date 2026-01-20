@@ -37,6 +37,7 @@ export interface SubAccountState {
   takeProfitThreshold: number
   positionSizeMultiplier: number
   orderType: OrderType
+  positionPeaks: Map<string, number>
 }
 
 export interface AccountContext {

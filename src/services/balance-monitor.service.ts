@@ -6,6 +6,7 @@ import { TelegramService } from './telegram.service'
 import { LoggerService } from './logger.service'
 import { FillProcessorService } from './fill-processor.service'
 import { RiskMonitorService } from './risk-monitor.service'
+import { saveState } from './state-persistence.service'
 import { calculateBalanceRatio } from '@/utils/scaling.utils'
 
 export interface MonitorSnapshot {
@@ -144,10 +145,15 @@ export class BalanceMonitorService {
 
   private async checkTakeProfitMode(userPositions: Position[], userBalance: number): Promise<void> {
     const state = this.telegramService.getAccountState(this.accountId)
-    if (!state?.takeProfitThreshold || state.takeProfitThreshold <= 0) return
+    if (!state?.takeProfitThreshold || state.takeProfitThreshold === 0) return
 
     const { userWallet, vaultAddress } = this.accountConfig
     const threshold = state.takeProfitThreshold
+
+    if (threshold === -1) {
+      await this.checkDynamicTakeProfit(userPositions, userBalance, state)
+      return
+    }
 
     for (const pos of userPositions) {
       const profitPercent = (pos.unrealizedPnl / userBalance) * 100
@@ -183,6 +189,82 @@ export class BalanceMonitorService {
           )
         } catch (error) {
           console.error(`[${this.accountId}] Take profit failed for ${pos.coin}:`, error instanceof Error ? error.message : error)
+        }
+      }
+    }
+  }
+
+  private async checkDynamicTakeProfit(userPositions: Position[], userBalance: number, state: ReturnType<typeof this.telegramService.getAccountState>): Promise<void> {
+    if (!state) return
+
+    const { userWallet, vaultAddress } = this.accountConfig
+    const currentCoins = new Set(userPositions.map(p => p.coin))
+
+    for (const coin of state.positionPeaks.keys()) {
+      if (!currentCoins.has(coin)) {
+        state.positionPeaks.delete(coin)
+      }
+    }
+
+    for (const pos of userPositions) {
+      const profitPercent = (pos.unrealizedPnl / userBalance) * 100
+
+      if (profitPercent < 2) {
+        state.positionPeaks.delete(pos.coin)
+        continue
+      }
+
+      const currentPeak = state.positionPeaks.get(pos.coin)
+      if (!currentPeak || profitPercent > currentPeak) {
+        state.positionPeaks.set(pos.coin, profitPercent)
+        saveState(this.accountId, state)
+        continue
+      }
+
+      const retracement = (currentPeak - profitPercent) / currentPeak
+      let allowedRetracement: number
+      if (profitPercent < 3) {
+        allowedRetracement = 0.40
+      } else if (profitPercent < 5) {
+        allowedRetracement = 0.30
+      } else {
+        allowedRetracement = 0.20
+      }
+
+      if (retracement >= allowedRetracement && pos.unrealizedPnl > 0) {
+        console.log(`[${this.accountId}] 💰 Dynamic TP: ${pos.coin} at +${profitPercent.toFixed(2)}% (peak: ${currentPeak.toFixed(2)}%, retracement: ${(retracement * 100).toFixed(1)}%)`)
+
+        try {
+          await this.hyperliquidService.closePosition(
+            this.accountId,
+            pos.coin,
+            pos.markPrice,
+            userWallet,
+            undefined,
+            vaultAddress || undefined
+          )
+
+          state.positionPeaks.delete(pos.coin)
+          saveState(this.accountId, state)
+
+          this.loggerService.logTrade({
+            coin: pos.coin,
+            action: 'close',
+            side: pos.side,
+            size: Math.abs(pos.size),
+            price: pos.markPrice,
+            timestamp: Date.now(),
+            executionMs: 0,
+            connectionId: -1,
+            realizedPnl: pos.unrealizedPnl,
+            source: 'take-profit-dynamic'
+          })
+
+          await this.telegramService.sendMessage(
+            `💰 [${state.name}] Dynamic TP: Closed ${pos.coin} at +${profitPercent.toFixed(1)}% (peak: ${currentPeak.toFixed(1)}%, +$${pos.unrealizedPnl.toFixed(2)})`
+          )
+        } catch (error) {
+          console.error(`[${this.accountId}] Dynamic take profit failed for ${pos.coin}:`, error instanceof Error ? error.message : error)
         }
       }
     }

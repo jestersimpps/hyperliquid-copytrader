@@ -298,7 +298,8 @@ export class TelegramService {
     const keyboard: TelegramBot.InlineKeyboardButton[][] = []
     let messageText = ''
 
-    const statusStr = state.tradingPaused ? '⏸️ PAUSED' : (state.hrefThreshold > 0 ? `🔗 HREF ${state.hrefThreshold}%` : (state.takeProfitThreshold > 0 ? `💰 TP ${state.takeProfitThreshold}%` : '✅ ACTIVE'))
+    const tpLabel = state.takeProfitThreshold === -1 ? 'DYN' : `${state.takeProfitThreshold}%`
+    const statusStr = state.tradingPaused ? '⏸️ PAUSED' : (state.hrefThreshold > 0 ? `🔗 HREF ${state.hrefThreshold}%` : (state.takeProfitThreshold !== 0 ? `💰 TP ${tpLabel}` : '✅ ACTIVE'))
     messageText = `🎛️ *${data.config.name}* (${statusStr})\n`
     messageText += `Tracking: \`${this.formatAddress(data.config.trackedWallet)}\`\n`
 
@@ -420,9 +421,9 @@ export class TelegramService {
     const tpThreshold = state.takeProfitThreshold
     keyboard.push([
       { text: tpThreshold === 0 ? '✓ Off' : 'Off', callback_data: `takeprofit:${accountId}:0` },
-      { text: tpThreshold === 1 ? '✓ 1%' : '1%', callback_data: `takeprofit:${accountId}:1` },
-      { text: tpThreshold === 2 ? '✓ 2%' : '2%', callback_data: `takeprofit:${accountId}:2` },
-      { text: tpThreshold === 5 ? '✓ 5%' : '5%', callback_data: `takeprofit:${accountId}:5` }
+      { text: tpThreshold === 5 ? '✓ 5%' : '5%', callback_data: `takeprofit:${accountId}:5` },
+      { text: tpThreshold === 10 ? '✓ 10%' : '10%', callback_data: `takeprofit:${accountId}:10` },
+      { text: tpThreshold === -1 ? '✓ Dynamic' : 'Dynamic', callback_data: `takeprofit:${accountId}:-1` }
     ])
 
     keyboard.push([{ text: '━━━ 📦 Order Type ━━━', callback_data: 'noop' }])
@@ -933,10 +934,19 @@ export class TelegramService {
     }
 
     state.takeProfitThreshold = threshold
+    state.positionPeaks.clear()
     saveState(accountId, state)
-    await this.sendMessage(threshold > 0
-      ? `💰 [${data.config.name}] Take profit set to *${threshold}%*\nPositions will auto-close at +${threshold}% profit`
-      : `💰 [${data.config.name}] Take profit *disabled*`)
+
+    let message: string
+    if (threshold === -1) {
+      message = `💰 [${data.config.name}] Take profit set to *Dynamic*\nTrails profit from 2%+ with tightening retracement`
+    } else if (threshold > 0) {
+      message = `💰 [${data.config.name}] Take profit set to *${threshold}%*\nPositions will auto-close at +${threshold}% profit`
+    } else {
+      message = `💰 [${data.config.name}] Take profit *disabled*`
+    }
+
+    await this.sendMessage(message)
     await this.sendAccountMenu(accountId)
   }
 
