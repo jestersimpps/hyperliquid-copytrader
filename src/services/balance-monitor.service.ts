@@ -75,9 +75,6 @@ export class BalanceMonitorService {
       if (state) {
         this.fillProcessor.setPositionSizeMultiplier(state.positionSizeMultiplier)
 
-        if (state.orderType === 'limit') {
-          await this.cancelUnfilledOrders(userPositionWallet)
-        }
       }
 
       const snapshot: MonitorSnapshot = {
